@@ -1,0 +1,81 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>⚔️Rise of Agon PvP Finder</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div class="brand">
+        <h1>⚔️Rise of Agon PvP Finder</h1>
+      </div>
+      <div class="me" id="meBox"></div>
+    </header>
+
+    <section class="card">
+      <h2>Current Players Matching:</h2>
+      <div id="openFights" class="list"></div>
+    </section>
+
+    <section class="grid">
+      <section class="card" id="createCard">
+        <h2>Create a fight</h2>
+        <p class="hint">Pick a format.</p>
+        <p class="hint" style="margin-top:-8px;">If it’s more than 1v1, list your teammates usernames (they must be registered on the website already).</p>
+
+        <div class="row">
+          <button class="btn selectBtn selected" data-size="1">1v1</button>
+          <button class="btn selectBtn" data-size="2">2v2</button>
+          <button class="btn selectBtn" data-size="3">3v3</button>
+          <button class="btn selectBtn" data-size="5">5v5</button>
+        </div>
+
+        <div class="row">
+          <button class="btn small" id="customToggle">Custom team size</button>
+        </div>
+
+        <div class="row hidden" id="customRow">
+          <label>Team size</label>
+          <input id="customSize" type="number" min="1" max="50" value="1" style="min-width:120px"/>
+        </div>
+
+        <div class="row">
+          <div class="pill" id="chosenMode">Mode: 1v1</div>
+        </div>
+
+        <div class="row" id="teammatesRow" style="display:none;">
+          <label>Teammates (comma-separated; you are NOT included)</label>
+          <input id="teammates" placeholder="e.g. Jacob, Devil, Goblin Fighter" />
+          <div class="tiny">Required count: <span id="needCount">0</span></div>
+        </div>
+
+        <button class="btn primary" id="createFightBtn">Confirm & list fight</button>
+        <div class="tiny" id="createMsg"></div>
+      </section>
+
+      <section class="card">
+        <h2>Notifications</h2>
+        <div class="tiny hint">Match found alerts will flash + play sound until you open the match.</div>
+        <div id="notifs" class="list"></div>
+      </section>
+    </section>
+  </div>
+
+  <div id="matchPanel" class="panel hidden">
+    <div class="panelHead">
+      <div class="panelTitle">Match</div>
+      <div class="row" style="margin:0;">
+        <button class="btn small" id="popOutBtn" title="Open in a new tab">Pop out</button>
+        <button class="btn small" id="closePanelBtn">Close</button>
+      </div>
+    </div>
+    <iframe id="matchFrame" class="panelFrame" src="about:blank"></iframe>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/ui.js"></script>
+</body>
+</html>

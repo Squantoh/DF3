@@ -1,0 +1,66 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Match • Rise of Agon PvP Finder</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="matchBody">
+  <div class="matchShell">
+    <header class="matchHeader">
+      <div class="matchHeaderLeft">
+        <div>
+          <div class="matchTitle">Match Room</div>
+          <div class="matchSub" id="matchSub">Anonymous warriors until the battle ends.</div>
+        </div>
+      </div>
+      <div class="me" id="meBox"></div>
+    </header>
+
+    <main class="matchMain">
+      <section class="card compact">
+        <div class="row" style="margin:0; justify-content:space-between;">
+          <div>
+            <div class="tiny">Location</div>
+            <div class="big" id="location">Loading…</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="tiny">Match timeout</div>
+            <div class="big" id="timer">--:--</div>
+            <button class="btn small" id="extendBtn">Extend +15m</button>
+            <div class="tiny" id="extendMsg"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card compact" id="winnerCard">
+        <div class="row" style="margin:0; justify-content:space-between; align-items:flex-start;">
+          <div>
+            <div class="tiny">Select a winner after the fight has concluded</div>
+            <div class="tiny hint" style="margin:4px 0 0;">Choose once. If both sides disagree, the Herald will demand a new decision.</div>
+          </div>
+          <div class="row" style="margin:0;">
+            <button class="btn" id="voteWin">We Won!</button>
+            <button class="btn" id="voteLose">We Lost</button>
+          </div>
+        </div>
+        <div class="tiny" id="winnerMsg"></div>
+      </section>
+
+      <section class="card compact">
+        <h2 style="margin:0 0 8px;">All Chat</h2>
+        <div id="chatLog" class="chat compactChat"></div>
+        <div class="row" style="margin:8px 0 0;">
+          <input id="chatInput" placeholder="Type… (anonymous)" />
+          <button class="btn primary" id="sendChat">Send</button>
+        </div>
+        <div class="tiny" id="chatLockMsg"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/match.js"></script>
+</body>
+</html>
