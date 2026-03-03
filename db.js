@@ -139,7 +139,15 @@ export async function initSchema() {
   await query(`ALTER TABLE match_history ADD COLUMN IF NOT EXISTS poster_ids INT[]`);
   await query(`ALTER TABLE match_history ADD COLUMN IF NOT EXISTS accepter_ids INT[]`);
 
-  // Useful indexes
+  
+  // Ensure match_history has result column (winner team) and is non-null
+  await query(`ALTER TABLE match_history ADD COLUMN IF NOT EXISTS result TEXT`);
+  await query(`UPDATE match_history SET result='DRAW' WHERE result IS NULL`);
+  await query(`ALTER TABLE match_history ALTER COLUMN result SET DEFAULT 'DRAW'`);
+  // Best-effort: make result NOT NULL if possible
+  try { await query(`ALTER TABLE match_history ALTER COLUMN result SET NOT NULL`); } catch(e) {}
+
+// Useful indexes
   await query(`CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id, created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_announcements_created ON announcements(created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_messages_code_at ON match_messages(code, at ASC);`);
