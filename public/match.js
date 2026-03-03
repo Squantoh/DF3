@@ -76,8 +76,10 @@ async function loadFight(){
   if(Number(FIGHT.team_size)===1){ winBtn.textContent="I Won!"; loseBtn.textContent="I Lost"; }
   else { winBtn.textContent="We Won!"; loseBtn.textContent="We Lost"; }
 
-  if(FIGHT.status==="CONCLUDED") await showConcluded();
-}
+  if(FIGHT.status==="CONCLUDED" || FIGHT.status==="ARCHIVED"){
+    try{ chatInput.disabled=true; sendBtn.disabled=true; }catch{}
+    startCloseCountdown();
+  }
 async function loadChatHistory(){
   const h=await api(`/api/fights/${code}/history`);
   for(const m of (h.chat_log||[])){
@@ -177,6 +179,8 @@ function setupWinnerVoting(){
     }
     if(data.concluded){
       msg.textContent="Match concluded."; 
+      try{ chatInput.disabled=true; sendBtn.disabled=true; }catch{}
+      startCloseCountdown();
       loadFight();
       return;
     }
@@ -270,3 +274,21 @@ function setupExtend(){
   setupExtend();
   setTimeout(()=>{ try{ document.getElementById('chatInput').focus(); }catch{} }, 150);
 })();
+
+
+function startCloseCountdown(){
+  const banner=document.getElementById("concludeBanner");
+  const n=document.getElementById("concludeCountdown");
+  if(!banner||!n) return;
+  banner.classList.remove("hidden");
+  let t=5;
+  n.textContent=String(t);
+  const iv=setInterval(()=>{
+    t-=1;
+    n.textContent=String(t);
+    if(t<=0){
+      clearInterval(iv);
+      try{ window.parent.postMessage({type:"CLOSE_MATCH", code}, "*"); }catch{}
+    }
+  },1000);
+}

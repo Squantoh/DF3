@@ -696,3 +696,17 @@ function setupReport(){
     }
   };
 }
+
+
+window.addEventListener("message",(ev)=>{
+  const d=ev.data;
+  if(!d || typeof d!=="object") return;
+  if(d.type==="CLOSE_MATCH"){
+    try{
+      const panel=document.getElementById("matchPanel");
+      if(panel) panel.classList.add("hidden");
+      OPEN_MATCH_CODE=null;
+      refreshNotifs();
+    }catch{}
+  }
+});
