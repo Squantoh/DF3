@@ -527,6 +527,7 @@ async function setupAdminTools(){
 
   const openMatchesBtn=document.getElementById("openMatchesBtn");
   const openReportsBtn=document.getElementById("openReportsBtn");
+  const clearAllMatchesBtn=document.getElementById("clearAllMatchesBtn");
 
   let matches=[];
   let page=1;
@@ -640,6 +641,15 @@ async function setupAdminTools(){
     setMode("reports");
     await loadReports();
     drawer.classList.remove("hidden");
+  });
+
+  clearAllMatchesBtn && clearAllMatchesBtn.addEventListener("click", async ()=>{
+    if(!confirm("Delete ALL matches (open + history + chat logs)?")) return;
+    await api("/api/admin/matches/clear",{method:"POST", body:"{}"});
+    // refresh panels
+    try{ await refreshOpenFights(); }catch{}
+    try{ await refreshLeaderboard(); }catch{}
+    drawer?.classList.add("hidden");
   });
 
   closeDrawer && closeDrawer.addEventListener("click", ()=>drawer?.classList.add("hidden"));

@@ -9,6 +9,8 @@ import { Server } from "socket.io";
 import http from "http";
 import { initSchema, query } from "./db.js";
 
+import crypto from "crypto";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -790,6 +792,15 @@ app.get("/api/admin/players", authMiddleware, adminMiddleware, async (_req,res)=
   res.json({ players: r.rows });
 });
 
+
+app.post("/api/admin/matches/clear", authMiddleware, adminMiddleware, async (_req,res)=>{
+  // Remove all current fights and history + chat logs
+  await query("TRUNCATE match_messages");
+  await query("TRUNCATE fights CASCADE");
+  await query("TRUNCATE match_history CASCADE");
+  res.json({ ok:true });
+});
+
 // Admin endpoints
 app.get("/api/admin/me", authMiddleware, async (req, res) => {
   const u = await getUserById(req.auth.id);
@@ -985,7 +996,7 @@ io.on("connection", (socket) => {
     const side = (fight.poster_ids||[]).includes(userId) ? "POSTER" : ((fight.accepter_ids||[]).includes(userId) ? "ACCEPTER" : "SYSTEM");
 
     const ALIASES = ["Akathar","Guardian","Fire Dragon","Dark Dragon","Devil","Demon Lord","Goblin Fighter","Goblin Warlord","Goblin Scout","Brown Bear","Tomb Iklit","Human Guildmaster","Deadeye","Manscorpion","Gorra Dar","Sand Iklit","Erodach","Baradron","Forest Golem","Troll","Troll Lord","Great White","Brownie","Goblin Shaman","Giant Spider","Windlord","Centaur","Ancient","Beastman","Crog","Khamset","Minotaur","Kraken"];
-    const h = require("crypto").createHash("sha1").update(code+":"+userId).digest("hex");
+    const h = crypto.createHash("sha1").update(code+":"+userId).digest("hex");
     const idx = parseInt(h.slice(0,8),16) % ALIASES.length;
     const alias = ALIASES[idx];
 
