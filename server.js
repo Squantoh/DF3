@@ -931,10 +931,16 @@ io.on("connection", (socket) => {
   });
 
   socket.on("joinFightRoom", async ({ code }) => {
-    socket.emit("joinMatch", code);
+    const c = String(code||"").trim();
+    if(!c) return;
+    socket.join(`match:${c}`);
+    socket.data.currentMatchCode = c;
+    socket.emit("joined", { code: c });
   });
 
   socket.on("joinMatch", async (code) => {
+    const c = (typeof code==="object" && code) ? String(code.code||"") : String(code||"");
+    code = c.trim();
     const userId = socket.data.userId;
     if (!userId) return;
     // allow if participant or admin

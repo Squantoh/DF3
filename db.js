@@ -125,6 +125,20 @@ export async function initSchema() {
   );`);
   await query(`CREATE INDEX IF NOT EXISTS idx_reports_created ON reports(created_at DESC);`);
 
+
+  // Ensure newer match_history columns exist (safe migrations)
+  await query(`ALTER TABLE match_history ADD COLUMN IF NOT EXISTS final_status TEXT`);
+  await query(`ALTER TABLE match_history ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ`);
+  await query(`ALTER TABLE match_history ADD COLUMN IF NOT EXISTS concluded_at TIMESTAMPTZ`);
+  await query(`ALTER TABLE match_history ADD COLUMN IF NOT EXISTS poster_team_name TEXT`);
+  await query(`ALTER TABLE match_history ADD COLUMN IF NOT EXISTS accepter_team_name TEXT`);
+  await query(`ALTER TABLE match_history ADD COLUMN IF NOT EXISTS rating_delta INT`);
+  await query(`ALTER TABLE match_history ADD COLUMN IF NOT EXISTS location TEXT`);
+  await query(`ALTER TABLE match_history ADD COLUMN IF NOT EXISTS team_size INT`);
+  await query(`ALTER TABLE match_history ADD COLUMN IF NOT EXISTS format TEXT`);
+  await query(`ALTER TABLE match_history ADD COLUMN IF NOT EXISTS poster_ids INT[]`);
+  await query(`ALTER TABLE match_history ADD COLUMN IF NOT EXISTS accepter_ids INT[]`);
+
   // Useful indexes
   await query(`CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id, created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_announcements_created ON announcements(created_at DESC);`);
