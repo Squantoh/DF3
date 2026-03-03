@@ -69,7 +69,7 @@ async function loadFight(){
   socket.emit("joinFightRoom", { code, userId: ME.id });
   document.getElementById("location").textContent=(FIGHT.location || FIGHT.meetup_location || "Pending…");
   setChatLocked(!!FIGHT.chat_locked);
-  matchEndsAtMs = (FIGHT.match_expires_at || FIGHT.match_ends_at || FIGHT.match_ends_at) ? Date.parse(FIGHT.match_expires_at || FIGHT.match_ends_at) : null;
+  matchEndsAtMs = (FIGHT.match_expires_at || FIGHT.match_ends_at) ? Date.parse(FIGHT.match_expires_at || FIGHT.match_ends_at) : null;
 
   const winBtn=document.getElementById("voteWin");
   const loseBtn=document.getElementById("voteLose");

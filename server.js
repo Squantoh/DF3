@@ -409,110 +409,96 @@ app.delete("/api/fights/:code", authMiddleware, async (req, res) => {
 });
 
 // Accept fight: provide teammateUsernames excluding self
-app.post("/api/fights/:code/accept", authMiddleware, async (req, res) => {
+app.post("/api/fights/:code/accept", authMiddleware, async (req,res)=>{
   const code = String(req.params.code);
-  const r = await query("SELECT * FROM fights WHERE code=$1", [code]);
-  const fight = r.rows[0];
-  if (!fight) return res.status(404).json({ error: "not found" });
-  if (fight.status !== "OPEN") return res.status(400).json({ error: "not open" });
+  const meId = req.auth.id;
+  const usernames = Array.isArray(req.body?.usernames) ? req.body.usernames : [];
+  const cleanNames = usernames.map(x=>String(x||"").trim()).filter(Boolean);
 
-  // Do not allow if user already involved
-  if ((fight.poster_ids || []).includes(req.auth.id)) return res.status(400).json({ error: "You are already in this fight." });
+  // load fight
+  const fr = await query("SELECT * FROM fights WHERE code=$1", [code]);
+  const fight = fr.rows[0];
+  if(!fight) return res.status(404).json({ error:"Not found" });
+  if(fight.status !== "OPEN") return res.status(400).json({ error:"not open" });
 
-  const accepter = await getUserById(req.auth.id);
-  if (!accepter || accepter.banned) return res.status(403).json({ error: "banned" });
-  if (await userHasActiveFight(accepter.id)) return res.status(400).json({ error: "You are already participating in a fight." });
-
-  const teamSize = fight.team_size;
-  const teammateUsernames = Array.isArray(req.body?.teammateUsernames) ? req.body.teammateUsernames : [];
-  if (teamSize > 1 && teammateUsernames.length !== (teamSize - 1)) {
-    return res.status(400).json({ error: `For ${teamSize}v${teamSize}, provide exactly ${teamSize - 1} teammate usernames (excluding you).` });
+  // Resolve accepter ids: includes acceptor + teammates (team_size-1)
+  const needTeammates = Math.max(0, (fight.team_size||1) - 1);
+  if(needTeammates > 0 && cleanNames.length !== needTeammates){
+    return res.status(400).json({ error:`Need ${needTeammates} teammate username(s)` });
   }
 
-  const accIds = [accepter.id];
-  const seen = new Set([accepter.username_lc]);
-  for (const name of teammateUsernames) {
-    const uu = await getUserByUsernameCI(name);
-    if (!uu) return res.status(400).json({ error: `Unknown user: ${name}` });
-    if (uu.banned) return res.status(400).json({ error: `User is banned: ${uu.username}` });
-    if (seen.has(uu.username_lc)) return res.status(400).json({ error: "Duplicate teammate username" });
-    seen.add(uu.username_lc);
-    if ((fight.poster_ids || []).includes(uu.id)) return res.status(400).json({ error: "Teammate cannot be on poster team" });
-    if (await userHasActiveFight(uu.id)) return res.status(400).json({ error: `${uu.username} is already participating in a fight.` });
-    accIds.push(uu.id);
+  // Fetch teammates by username case-insensitive
+  const accepterIds = [meId];
+  if(needTeammates){
+    const r = await query("SELECT id, username FROM users WHERE LOWER(username) = ANY($1)", [cleanNames.map(n=>n.toLowerCase())]);
+    if(r.rows.length !== needTeammates){
+      return res.status(400).json({ error:"All teammate usernames must be registered" });
+    }
+    for(const u of r.rows){
+      if(!accepterIds.includes(u.id)) accepterIds.push(u.id);
+    }
+    if(accepterIds.length !== 1 + needTeammates){
+      return res.status(400).json({ error:"Duplicate teammate usernames not allowed" });
+    }
   }
 
-  // Set accepted info
-  const location = pickLocation();
-  const acceptedAt = new Date();
-  const matchExpiresAt = new Date(acceptedAt.getTime() + 30 * 60 * 1000);
+  // Make sure acceptor isn't on poster team
+  if((fight.poster_ids||[]).includes(meId)) return res.status(400).json({ error:"Poster team can't accept its own fight" });
 
+  // Choose location
+  const LOCS = ["South of Simiran","West of Hintenfau","North of White View","West of Ottenhal","South West of Espenhal","North of Tolenque","South of Hintenfau","South of Ottenhal"];
+  const location = LOCS[Math.floor(Math.random()*LOCS.length)];
+
+  const endsAt = new Date(Date.now() + 30*60*1000).toISOString();
+
+  // Update fight to matched
   await query(
-    "UPDATE fights SET status='MATCHED', accepted_at=$1, match_expires_at=$2, location=$3, accepter_ids=$4, accepter_team_name=$5 WHERE code=$6",
-    [acceptedAt, matchExpiresAt, location, accIds, accepter.team_name, code]
+    "UPDATE fights SET status='MATCHED', accepter_ids=$1, accepted_at=NOW(), location=$2, match_expires_at=$3 WHERE code=$4",
+    [accepterIds, location, endsAt, code]
   );
 
   // notify all participants
-  const everyone = [...(fight.poster_ids || []), ...accIds];
-  for (const uid of everyone) {
-    await notifyUser(uid, "MATCH_READY", { code });
+  const participantIds = Array.from(new Set([...(fight.poster_ids||[]), ...accepterIds]));
+  for(const uid of participantIds){
+    await notifyUser(uid, "MATCH_READY", { code, team_size: fight.team_size, meetup_location: location });
   }
+  io.to(`match:${code}`).emit("matchReady", { code, team_size: fight.team_size, location, match_expires_at: endsAt });
 
-  // system message
-  await query("INSERT INTO match_messages(code, side, alias, text) VALUES ($1,'SYSTEM',NULL,$2)", [code, "A match has been found. Proceed to the room."]);
-
-  res.json({ ok: true });
+  res.json({ ok:true, code });
 });
 
 // Fight/match detail (for match page)
-app.get("/api/fights/:code", authMiddleware, async (req, res) => {
+app.get("/api/fights/:code", authMiddleware, async (req,res)=>{
   const code = String(req.params.code);
   let r = await query("SELECT * FROM fights WHERE code=$1", [code]);
   let fight = r.rows[0] || null;
   let archived = false;
 
-  if (!fight) {
+  if(!fight){
     const hr = await query("SELECT * FROM match_history WHERE code=$1", [code]);
-    if (hr.rows[0]) {
-      fight = { ...hr.rows[0], status: "ARCHIVED" };
-      archived = true;
-    }
+    if(hr.rows[0]){ fight = { ...hr.rows[0], status:"ARCHIVED" }; archived = true; }
   }
-  if (!fight) return res.status(404).json({ error: "not found" });
+  if(!fight) return res.status(404).json({ error:"not found" });
 
   const me = await getUserById(req.auth.id);
   const allowed = await isUserInFight(req.auth.id, fight) || (me && isAdmin(me.username));
-  if (!allowed) return res.status(403).json({ error: "Not a participant" });
+  if(!allowed) return res.status(403).json({ error:"Not a participant" });
 
-  // messages
-  const msgs = await query("SELECT side, alias, text, at FROM match_messages WHERE code=$1 ORDER BY at ASC", [code]);
-
-  // Determine my side
-  let my_side = "SYSTEM";
-  if ((fight.poster_ids || []).includes(req.auth.id)) my_side = "POSTER";
-  if ((fight.accepter_ids || []).includes(req.auth.id)) my_side = "ACCEPTER";
-
-  res.json({
-    fight: {
-      code: fight.code,
-      team_size: fight.team_size,
-      format: fight.format,
-      status: fight.status,
-      created_at: fight.created_at,
-      accepted_at: fight.accepted_at,
-      match_expires_at: fight.match_expires_at,
-      location: fight.location,
-      poster_ids: fight.poster_ids || [],
-      accepter_ids: fight.accepter_ids || [],
-      poster_team_name: fight.poster_team_name,
-      accepter_team_name: fight.accepter_team_name,
-      result: fight.result || fight.final_status || null,
-      rating_delta: fight.rating_delta || null,
-      my_side,
-      archived
-    },
-    messages: msgs.rows
-  });
+  const my_side = (fight.poster_ids||[]).includes(req.auth.id) ? "POSTER" : ((fight.accepter_ids||[]).includes(req.auth.id) ? "ACCEPTER" : "ADMIN");
+  const out = {
+    code: fight.code,
+    team_size: fight.team_size,
+    format: fight.format,
+    status: fight.status,
+    location: fight.location,
+    match_expires_at: fight.match_expires_at,
+    poster_team_name: fight.poster_team_name,
+    accepter_team_name: fight.accepter_team_name,
+    poster_confirm: fight.poster_confirm,
+    accepter_confirm: fight.accepter_confirm,
+    my_side
+  };
+  res.json({ fight: out, archived });
 });
 
 // Chat
@@ -985,7 +971,7 @@ io.on("connection", (socket) => {
     if(!allowed) return;
 
     // lock chat if concluded
-    if((fight.status === "CONCLUDED") || (fight.status === "ARCHIVED") || fight.chat_locked) return;
+    if((fight.status === "CONCLUDED") || (fight.status === "ARCHIVED") ) return;
 
     const clean = String(text||"").trim().slice(0, 280);
     if(!clean) return;
