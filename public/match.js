@@ -156,7 +156,7 @@ function setupWinnerVoting(){
     try{
       hasVoted=true; setButtons(false);
       msg.textContent="Waiting on opponent to confirm loss or victory…";
-      const out=await api(`/api/fights/${code}/vote-winner`,{method:"POST", body: JSON.stringify({vote: choice})});
+      const out=await api(`/api/fights/${code}/vote-winner`,{method:"POST", body: JSON.stringify({vote: outcome})});
       if(out.concluded){ msg.textContent="Agreement reached. Sealing the record…"; await loadFight(); }
       if(out.reset){ hasVoted=false; setButtons(true); msg.textContent="A winner must be decided. Select again."; }
     }catch(e){ hasVoted=false; setButtons(true); msg.textContent=e.message; }
@@ -164,6 +164,41 @@ function setupWinnerVoting(){
 
   winBtn.onclick=()=>vote("WIN");
   loseBtn.onclick=()=>vote("LOSS");
+
+
+  socket.on("winnerUpdate",(data)=>{
+    if(!data) return;
+    if(data.conflict){
+      hasVoted=false; setButtons(true);
+      msg.textContent="A winner must be decided. Select again.";
+      card.classList.add("nudge");
+      setTimeout(()=>card.classList.remove("nudge"), 900);
+      return;
+    }
+    if(data.concluded){
+      msg.textContent="Match concluded."; 
+      loadFight();
+      return;
+    }
+    // confirmation messages
+    if(data.poster_confirm){
+      const isMine = FIGHT.my_side==="POSTER";
+      addSystemLine(isMine ? `Your team has confirmed a ${data.poster_confirm==="WIN"?"WIN":"LOSS"}.` : `The enemy team has confirmed a ${data.poster_confirm==="WIN"?"WIN":"LOSS"}.`);
+    }
+    if(data.accepter_confirm){
+      const isMine = FIGHT.my_side==="ACCEPTER";
+      addSystemLine(isMine ? `Your team has confirmed a ${data.accepter_confirm==="WIN"?"WIN":"LOSS"}.` : `The enemy team has confirmed a ${data.accepter_confirm==="WIN"?"WIN":"LOSS"}.`);
+    }
+    // nudge if opponent voted
+    if((data.poster_confirm && FIGHT.my_side!=="POSTER") || (data.accepter_confirm && FIGHT.my_side!=="ACCEPTER")){
+      if(!winBtn.disabled && !loseBtn.disabled){
+        card.classList.add("nudge");
+        flashBrowser();
+        setTimeout(()=>card.classList.remove("nudge"), 900);
+      }
+    }
+  });
+
 
   socket.on("voteReset", ()=>{ hasVoted=false; setButtons(true); msg.textContent="A winner must be decided. Select again."; });
 
@@ -230,6 +265,7 @@ function setupExtend(){
   await loadChatHistory();
   startTimer();
   setupChat();
+  try{ document.getElementById("chatInput")?.focus(); }catch{}
   setupWinnerVoting();
   setupExtend();
   setTimeout(()=>{ try{ document.getElementById('chatInput').focus(); }catch{} }, 150);

@@ -628,6 +628,13 @@ async function setupAdminTools(){
     drawer.classList.remove("hidden");
   });
 
+  const clearReportsBtn=document.getElementById("clearReportsBtn");
+  clearReportsBtn && clearReportsBtn.addEventListener("click", async ()=>{
+    if(!confirm("Clear ALL player reports?")) return;
+    await api("/api/admin/reports/clear",{method:"POST", body:"{}"});
+    await loadReports();
+  });
+
   openReportsBtn && openReportsBtn.addEventListener("click", async ()=>{
     if(!drawer) return;
     setMode("reports");

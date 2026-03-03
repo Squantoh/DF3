@@ -448,7 +448,7 @@ app.post("/api/fights/:code/accept", authMiddleware, async (req, res) => {
   const matchExpiresAt = new Date(acceptedAt.getTime() + 30 * 60 * 1000);
 
   await query(
-    "UPDATE fights SET status='ACCEPTED', accepted_at=$1, match_expires_at=$2, location=$3, accepter_ids=$4, accepter_team_name=$5 WHERE code=$6",
+    "UPDATE fights SET status='MATCHED', accepted_at=$1, match_expires_at=$2, location=$3, accepter_ids=$4, accepter_team_name=$5 WHERE code=$6",
     [acceptedAt, matchExpiresAt, location, accIds, accepter.team_name, code]
   );
 
@@ -524,7 +524,7 @@ app.post("/api/fights/:code/chat", authMiddleware, async (req, res) => {
   const fr = await query("SELECT * FROM fights WHERE code=$1", [code]);
   const fight = fr.rows[0];
   if (!fight) return res.status(404).json({ error: "not found" });
-  if (fight.status !== "ACCEPTED") return res.status(400).json({ error: "chat locked" });
+  if (fight.status !== "MATCHED") return res.status(400).json({ error: "chat locked" });
 
   if (!(await isUserInFight(req.auth.id, fight))) return res.status(403).json({ error: "Not a participant" });
 
@@ -544,7 +544,7 @@ app.post("/api/fights/:code/confirm", authMiddleware, async (req, res) => {
   const fr = await query("SELECT * FROM fights WHERE code=$1", [code]);
   const fight = fr.rows[0];
   if (!fight) return res.status(404).json({ error: "not found" });
-  if (fight.status !== "ACCEPTED") return res.status(400).json({ error: "not active" });
+  if (fight.status !== "MATCHED") return res.status(400).json({ error: "not active" });
   if (!(await isUserInFight(req.auth.id, fight))) return res.status(403).json({ error: "Not a participant" });
 
   const side = (fight.poster_ids || []).includes(req.auth.id) ? "POSTER" : "ACCEPTER";
@@ -885,7 +885,7 @@ setInterval(async () => {
       }
     }
 
-    const matchExp = await query("SELECT code, poster_ids, accepter_ids FROM fights WHERE status='ACCEPTED' AND match_expires_at <= NOW()");
+    const matchExp = await query("SELECT code, poster_ids, accepter_ids FROM fights WHERE status='MATCHED' AND match_expires_at <= NOW()");
     for (const f of matchExp.rows) {
       // Draw
       await query("UPDATE fights SET status='CONCLUDED', result='DRAW', rating_delta=0 WHERE code=$1", [f.code]);
