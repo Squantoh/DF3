@@ -76,10 +76,8 @@ async function loadFight(){
   if(Number(FIGHT.team_size)===1){ winBtn.textContent="I Won!"; loseBtn.textContent="I Lost"; }
   else { winBtn.textContent="We Won!"; loseBtn.textContent="We Lost"; }
 
-  if(FIGHT.status==="CONCLUDED" || FIGHT.status==="ARCHIVED"){
-    try{ chatInput.disabled=true; sendBtn.disabled=true; }catch{}
-    startCloseCountdown();
-  }
+  if(FIGHT.status==="CONCLUDED") await showConcluded();
+}
 async function loadChatHistory(){
   const h=await api(`/api/fights/${code}/history`);
   for(const m of (h.chat_log||[])){
