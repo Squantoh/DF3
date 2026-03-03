@@ -809,10 +809,55 @@ app.get("/api/admin/me", authMiddleware, async (req, res) => {
   res.json({ ok: true, username: u.username });
 });
 
-app.get("/api/admin/fights", authMiddleware, adminMiddleware, async (_req, res) => {
-  const active = await query("SELECT code, team_size, format, status, created_at, accepted_at, expires_at FROM fights ORDER BY created_at DESC");
-  const history = await query("SELECT code, team_size, format, result, created_at, accepted_at, concluded_at FROM match_history ORDER BY concluded_at DESC LIMIT 500");
-  res.json({ active: active.rows, history: history.rows });
+app.get("/api/admin/fights", authMiddleware, adminMiddleware, async (_req,res)=>{
+  const activeR = await query("SELECT * FROM fights ORDER BY created_at DESC");
+  const histR = await query("SELECT * FROM match_history ORDER BY concluded_at DESC NULLS LAST, created_at DESC");
+
+  const allRows = [...(activeR.rows||[]), ...(histR.rows||[])];
+  const allIds = Array.from(new Set(allRows.flatMap(r=>[...(r.poster_ids||[]), ...(r.accepter_ids||[])])));
+  const nameMap = new Map();
+  if(allIds.length){
+    const u = await query("SELECT id, username FROM users WHERE id = ANY($1)", [allIds]);
+    for(const row of u.rows) nameMap.set(row.id, row.username);
+  }
+
+  const enrich = (r, archived=false)=>{
+    const poster_usernames = (r.poster_ids||[]).map(id=>nameMap.get(id)).filter(Boolean);
+    const accepter_usernames = (r.accepter_ids||[]).map(id=>nameMap.get(id)).filter(Boolean);
+    const delta = Number(r.rating_delta||0);
+    let winner_usernames = [];
+    let loser_usernames = [];
+    let result = null;
+
+    if(archived){
+      const team = r.result || null;
+      if(team==="POSTER"){ winner_usernames = poster_usernames; loser_usernames = accepter_usernames; result="POSTER"; }
+      else if(team==="ACCEPTER"){ winner_usernames = accepter_usernames; loser_usernames = poster_usernames; result="ACCEPTER"; }
+      else if(team==="DRAW" || String(r.final_status||"").toUpperCase()==="DRAW"){ result="DRAW"; }
+    }
+
+    return {
+      code: r.code,
+      status: r.status || (archived?"ARCHIVED":""),
+      team_size: r.team_size,
+      format: r.format,
+      created_at: r.created_at,
+      accepted_at: r.accepted_at,
+      concluded_at: r.concluded_at,
+      location: r.location,
+      rating_delta: delta,
+      poster_usernames,
+      accepter_usernames,
+      result,
+      winner_usernames,
+      loser_usernames
+    };
+  };
+
+  res.json({
+    active: (activeR.rows||[]).map(r=>enrich(r,false)),
+    history: (histR.rows||[]).map(r=>enrich(r,true))
+  });
 });
 
 app.get("/api/admin/reports", authMiddleware, adminMiddleware, async (_req,res)=>{

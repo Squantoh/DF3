@@ -1,4 +1,6 @@
 const socket = io();
+let OPEN_MATCH_CODE = null;
+
 async function api(path, opts = {}) {
   const res = await fetch(path, { headers: { "Content-Type": "application/json" }, credentials: "include", ...opts });
   const data = await res.json().catch(() => ({}));
@@ -184,6 +186,8 @@ function openMatchPanel(code){
   const url=`/match/${code}`;
   frame.src=url;
   panel.classList.remove("hidden");
+  OPEN_MATCH_CODE = code;
+  try{ refreshNotifs(); }catch{}
   stopNotifyLoop();
   flashBrowserNotification("Rise of Agon PvP Finder", "Match opened.");
   document.getElementById("closePanelBtn").onclick=closeMatchPanel;
@@ -285,11 +289,12 @@ async function refreshNotifs(){
             <div class="meta">${time}</div>
           </div>
           <div class="row" style="margin:0;">
-            <button class="btn primary">Open match</button>
+            ${OPEN_MATCH_CODE===p.code?`<span class="tiny">Match open</span>`:`<button class="btn primary">Open match</button>`}
           </div>
         </div>
       `);
-      item.querySelector("button").onclick=async()=>{
+      const btn=item.querySelector("button");
+      if(btn) btn.onclick=async()=>{
         await api(`/api/notifications/${n.id}/read`,{method:"POST"}).catch(()=>{});
         openMatchPanel(p.code);
       };
@@ -352,7 +357,11 @@ async function refreshNotifs(){
 socket.on("notification", async (notif)=>{
   if(notif?.type==="MATCH_READY"){
     startNotifyLoop();
-    flashBrowserNotification("Rise of Agon PvP Finder","Match found! Open it to stop the alarm.");
+    flashBrowserNotification("Rise of Agon PvP Finder","Match found!");
+    if(notif?.payload?.code){
+      openMatchPanel(notif.payload.code);
+      stopNotifyLoop();
+    }
   }
   if(notif?.type==="FIGHT_CONCLUDED"){
     const r = String(notif.payload?.result || "");
@@ -590,6 +599,8 @@ async function setupAdminTools(){
           <div style="flex:1;">
             <div class="title">${escapeHtml(f.format || `${f.team_size}v${f.team_size}`)} <span class="tiny">(${escapeHtml(status)})</span></div>
             <div class="meta">Fight ID: <b>${escapeHtml(f.code)}</b> • ${escapeHtml(when)}</div>
+            <div class="meta">Participants: ${escapeHtml([...(f.poster_usernames||[]),...(f.accepter_usernames||[])].join(", "))}</div>
+            ${f.result?`<div class="meta">Result: ${escapeHtml(f.result)} • Winners: ${escapeHtml((f.winner_usernames||[]).join(", "))} (+${Math.abs(Number(f.rating_delta||0))}) • Losers: ${escapeHtml((f.loser_usernames||[]).join(", "))} (-${Math.abs(Number(f.rating_delta||0))})</div>`:""}
           </div>
           <button class="btn small primary">Open room</button>
         </div>`);
