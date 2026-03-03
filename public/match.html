@@ -1,0 +1,68 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Match • Rise of Agon PvP Finder</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%94%EF%B8%8F%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="matchBody">
+  <div class="matchShell">
+    <header class="matchHeader">
+      <div class="matchHeaderLeft">
+        <div>
+          <div class="matchTitle">Match Room</div>
+          <div class="matchSub" id="matchSub">Anonymous warriors until the battle ends.</div>
+        </div>
+      </div>
+      <div class="me" id="meBox"></div>
+    </header>
+
+    <main class="matchSplit">
+      <section class="matchLeft">
+        <section class="card compact">
+          <div class="matchTitleMini">Match</div>
+          <div class="tiny">Location</div>
+          <div class="big" id="location">Loading…</div>
+
+          <div class="row" style="margin:10px 0 0; justify-content:space-between; align-items:flex-end;">
+            <div>
+              <div class="tiny">Match timeout</div>
+              <div class="big" id="timer">--:--</div>
+            </div>
+            <div style="text-align:right;">
+              <button class="btn small" id="extendBtn">Extend +15m</button>
+              <div class="tiny" id="extendMsg"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card compact" id="winnerCard">
+          <div class="tiny">Select a winner after the fight has concluded</div>
+          <div class="row" style="margin:8px 0 0;">
+            <button class="btn" id="voteWin">We Won!</button>
+            <button class="btn" id="voteLose">We Lost</button>
+          </div>
+          <div class="tiny" id="winnerMsg"></div>
+        </section>
+      </section>
+
+      <section class="matchRight">
+        <section class="card compact" style="height:100%; display:flex; flex-direction:column;">
+          <h2 style="margin:0 0 8px;">All Chat</h2>
+          <div id="chatLog" class="chat chatFill"></div>
+          <div class="row" style="margin:8px 0 0;">
+            <input id="chatInput" placeholder="Type… (anonymous)" />
+            <button class="btn primary" id="sendChat">Send</button>
+          </div>
+          <div class="tiny" id="chatLockMsg"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/match.js"></script>
+</body>
+</html>

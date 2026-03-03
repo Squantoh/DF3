@@ -1,0 +1,171 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Rise of Agon PvP Finder</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%94%EF%B8%8F%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <button id="showAdminToolsBadge" class="adminBadge hidden" title="Show Admin Tools">A</button>
+  <div class="wrap">
+    <header class="top">
+      <div class="brand">
+        <h1>Rise of Agon PvP Finder</h1>
+      <div class="beta">Beta Access</div>
+      <div class="betaHint">There may be various bugs and issues with the website. Please use the report button in the bottom right to report any issues you encounter.</div>
+      </div>
+      <div class="me" id="meBox"></div>
+    </header>
+
+    <section class="card hidden" id="annCard">
+      <h2>Announcements</h2>
+      <div id="adminMessages" class="tiny"></div>
+    </section>
+
+    <section class="card">
+      <h2>Current Players Matching:</h2>
+      <div id="openFights" class="list"></div>
+    </section>
+
+    <section class="grid">
+      <section class="card" id="createCard">
+        <h2>Create a fight</h2>
+        <p class="hint">Pick a format.</p>
+        <p class="hint" style="margin-top:-8px;">If it’s more than 1v1, list your teammates usernames (they must be registered on the website already).</p>
+
+        <div class="row">
+          <button class="btn selectBtn selected" data-size="1">1v1</button>
+          <button class="btn selectBtn" data-size="2">2v2</button>
+          <button class="btn selectBtn" data-size="3">3v3</button>
+          <button class="btn selectBtn" data-size="5">5v5</button>
+        </div>
+
+        <div class="row">
+          <button class="btn small" id="customToggle">Custom team size</button>
+        </div>
+
+        <div class="row hidden" id="customRow">
+          <label>Team size</label>
+          <input id="customSize" type="number" min="1" max="50" value="1" style="min-width:120px"/>
+        </div>
+
+        <div class="row">
+          <div class="pill" id="chosenMode">Mode: 1v1</div>
+        </div>
+
+        <div class="row" id="teammatesRow" style="display:none;">
+          <label>Teammates (comma-separated; you are NOT included)</label>
+          <input id="teammates" placeholder="e.g. Jacob, Devil, Goblin Fighter" />
+          <div class="tiny">Required count: <span id="needCount">0</span></div>
+        </div>
+
+        <button class="btn primary" id="createFightBtn">Confirm & list fight</button>
+        <div class="tiny" id="createMsg"></div>
+      </section>
+
+      <section class="card">
+        <h2>Notifications</h2>
+        <div class="tiny hint">Match found alerts will flash + play sound until you open the match.</div>
+        <div id="notifs" class="list"></div>
+      </section>
+    </section>
+
+    <section class="card">
+      <h2>Leaderboard (Top 25)</h2>
+      <div id="leaderboard" class="list"></div>
+    </section>
+
+    <section class="card hidden" id="adminTools">
+  <div class="adminHeaderRow"><h2>Admin Tools</h2><button class="btn small" id="hideAdminTools">Hide</button></div>
+
+  <div class="adminRow">
+    <input id="annText" placeholder="Post admin message / update..." />
+    <button class="btn primary" id="postAnn">Post</button>
+    <button class="btn" id="clearAnnBtn">Clear</button>
+  </div>
+
+  <div class="adminRow">
+    <input id="delUser" placeholder="Delete account username" />
+    <button class="btn" id="delUserBtn">Delete</button>
+  </div>
+
+  <div class="adminRow">
+    <input id="banUser" placeholder="Ban username" />
+    <button class="btn" id="banBtn">Ban</button>
+  </div>
+
+  <div class="adminRow">
+    <input id="resetUser" placeholder="Reset username" />
+    <input id="resetRating" placeholder="Rating" style="max-width:120px;" />
+    <button class="btn" id="resetBtn">Reset</button>
+  </div>
+
+  <div class="adminRow">
+    <input id="delFightCode" placeholder="Delete fight by code" />
+    <button class="btn" id="delFightBtn">Delete</button>
+  </div>
+
+  <div class="adminRow">
+    <button class="btn" id="resetAllBtn">Reset ALL ratings</button>
+    <button class="btn" id="wipeNotifsBtn">Wipe notifications</button>
+  </div>
+
+  <div class="adminRow adminBottom">
+    <button class="btn primary" id="openMatchesBtn">View Matches</button>
+    <button class="btn" id="openReportsBtn">Player Reports</button>
+  </div>
+</section>
+  </div>
+
+  <div id="matchPanel" class="panel hidden">
+    <div class="panelHead">
+      <div class="panelTitle">Match</div>
+      <div class="row" style="margin:0;">
+        <button class="btn small" id="popOutBtn" title="Open in a new tab">Pop out</button>
+        <button class="btn small" id="closePanelBtn">Close</button>
+      </div>
+    </div>
+    <iframe id="matchFrame" class="panelFrame" src="about:blank"></iframe>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/ui.js"></script>
+
+  <div class="modal hidden" id="fightListModal">
+  <div class="modalInner">
+    <div class="row adminDrawerHeader" style="justify-content:space-between; align-items:center;">
+        <h2 style="margin:0;">Admin Panel</h2>
+        <button class="btn small" id="closeFightList">Close</button>
+      </div>
+
+      <div id="drawerBodyMatches">
+      <div id="fightList" class="list"></div>
+      <div class="pager" id="matchPager"></div>
+    </div>
+
+    <div id="drawerBodyReports" class="hidden">
+      <div id="reportList" class="list"></div>
+    </div>
+  </div>
+</div>
+
+<button id="reportBtn" class="reportBtn">Report</button>
+
+  <div class="overlay hidden" id="reportOverlay">
+    <div class="overlayCard card">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <h2 style="margin:0;">Report an issue</h2>
+        <button class="btn small" id="closeReport">Close</button>
+      </div>
+      <div class="tiny" style="margin:8px 0 10px;">Include what you were doing and what you expected to happen.</div>
+      <textarea id="reportText" rows="6" style="width:100%; resize:vertical;" placeholder="Type your report..."></textarea>
+      <div class="row" style="justify-content:flex-end; margin-top:10px;">
+        <button class="btn primary" id="sendReport">Send</button>
+      </div>
+      <div class="tiny" id="reportMsg"></div>
+    </div>
+  </div>
+</body>
+</html>
