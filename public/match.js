@@ -1,9 +1,23 @@
 const socket = io();
-async function api(path, opts = {}) {
-  const res = await fetch(path, { headers: { "Content-Type": "application/json" }, credentials: "include", ...opts });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || "Request failed");
-  return data;
+async function api(path, opts={}){
+  const url = path;
+  const res = await fetch(url, {
+    ...opts,
+    headers: {
+      "Content-Type":"application/json",
+      ...(opts.headers||{})
+    },
+    credentials: "same-origin"
+  });
+  if(!res.ok){
+    let txt = "";
+    try{ txt = await res.text(); }catch{}
+    console.error("[MATCH_API_ERROR]", url, res.status, txt);
+    throw new Error(txt || `HTTP_${res.status}`);
+  }
+  const ct = res.headers.get("content-type") || "";
+  if(ct.includes("application/json")) return await res.json();
+  return await res.text();
 }
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function addChatLine(who, whoClass, text, at){
