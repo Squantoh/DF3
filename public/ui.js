@@ -705,8 +705,6 @@ window.addEventListener("message",(ev)=>{
     try{
       const panel=document.getElementById("matchPanel");
       if(panel) panel.classList.add("hidden");
-      OPEN_MATCH_CODE=null;
-      refreshNotifs();
     }catch{}
   }
 });

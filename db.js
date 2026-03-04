@@ -140,11 +140,10 @@ export async function initSchema() {
   await query(`ALTER TABLE match_history ADD COLUMN IF NOT EXISTS accepter_ids INT[]`);
 
   
-  // Ensure match_history has result column (winner team) and is non-null
+  // Ensure match_history has result column and is non-null (winner team)
   await query(`ALTER TABLE match_history ADD COLUMN IF NOT EXISTS result TEXT`);
   await query(`UPDATE match_history SET result='DRAW' WHERE result IS NULL`);
   await query(`ALTER TABLE match_history ALTER COLUMN result SET DEFAULT 'DRAW'`);
-  // Best-effort: make result NOT NULL if possible
   try { await query(`ALTER TABLE match_history ALTER COLUMN result SET NOT NULL`); } catch(e) {}
 
 // Useful indexes

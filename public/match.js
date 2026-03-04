@@ -176,9 +176,8 @@ function setupWinnerVoting(){
       return;
     }
     if(data.concluded){
+      try{ startCloseCountdown(); }catch{}
       msg.textContent="Match concluded."; 
-      try{ chatInput.disabled=true; sendBtn.disabled=true; }catch{}
-      startCloseCountdown();
       loadFight();
       return;
     }
