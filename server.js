@@ -15,13 +15,21 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+app.use(express.json({ limit: "200kb" }));
+app.use(express.urlencoded({ extended: true }));
+app.use("/audio", express.static(path.join(__dirname, "audio")));
+app.use(express.static(path.join(__dirname, "public")));
+
+app.get("/", (_req,res)=> res.sendFile(path.join(__dirname, "public", "index.html")));
+
+app.use(express.static(path.join(__dirname, "public")));
+
 const server = http.createServer(app);
 const io = new Server(server);
 
 app.use(helmet({
   contentSecurityPolicy: false
 }));
-app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
