@@ -1,4 +1,4 @@
-const BUILD_VERSION = "v31";
+const BUILD_VERSION = "v32";
 
 const AUTO_OPENED = new Set(JSON.parse(sessionStorage.getItem("autoOpenedMatches")||"[]"));
 const DISMISSED = new Set(JSON.parse(sessionStorage.getItem("dismissedMatches")||"[]"));
@@ -747,3 +747,76 @@ window.addEventListener("message",(ev)=>{
     }catch{}
   }
 });
+
+
+function makeDraggable(el, opts={}){
+  if(!el) return;
+  const handle = opts.handle ? el.querySelector(opts.handle) : el;
+  const key = opts.key || el.id || "draggable";
+  try{
+    const saved = JSON.parse(localStorage.getItem("drag:"+key) || "null");
+    if(saved && typeof saved.x==="number" && typeof saved.y==="number"){
+      el.style.left = saved.x+"px";
+      el.style.top  = saved.y+"px";
+      el.style.right = "auto";
+      el.style.bottom = "auto";
+    }
+  }catch{}
+
+  let dragging=false, startX=0, startY=0, origX=0, origY=0;
+
+  const onDown=(e)=>{
+    if(e.button!==0) return;
+    const t=e.target;
+    if(t && (t.tagName==="INPUT"||t.tagName==="TEXTAREA"||t.tagName==="SELECT"||t.tagName==="BUTTON")) return;
+    dragging=true;
+    const rect=el.getBoundingClientRect();
+    startX=e.clientX; startY=e.clientY;
+    origX=rect.left; origY=rect.top;
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    e.preventDefault();
+  };
+
+  const onMove=(e)=>{
+    if(!dragging) return;
+    const dx=e.clientX-startX;
+    const dy=e.clientY-startY;
+    const nx=Math.max(0, origX+dx);
+    const ny=Math.max(0, origY+dy);
+    el.style.left = nx+"px";
+    el.style.top  = ny+"px";
+    el.style.right="auto";
+    el.style.bottom="auto";
+  };
+
+  const onUp=()=>{
+    if(!dragging) return;
+    dragging=false;
+    document.removeEventListener("mousemove", onMove);
+    document.removeEventListener("mouseup", onUp);
+    try{
+      const rect=el.getBoundingClientRect();
+      localStorage.setItem("drag:"+key, JSON.stringify({x: Math.round(rect.left), y: Math.round(rect.top)}));
+    }catch{}
+  };
+
+  handle.addEventListener("mousedown", onDown);
+}
+
+
+// Make admin panels draggable and always-on-top
+setTimeout(()=>{
+  try{
+    const adminTools = document.getElementById("adminTools") || document.querySelector(".adminTools");
+    const drawer = document.getElementById("drawer") || document.querySelector(".drawer") || document.getElementById("adminDrawer") || document.querySelector(".adminDrawer");
+    if(adminTools){
+      adminTools.classList.add("adminDrag");
+      makeDraggable(adminTools,{key:"adminTools", handle:".adminHeader, .drawerHeader, .cardTitle, h3"});
+    }
+    if(drawer){
+      drawer.classList.add("adminDrag");
+      makeDraggable(drawer,{key:"adminDrawer", handle:".drawerHeader, .adminHeader, .cardTitle, h3"});
+    }
+  }catch{}
+}, 250);

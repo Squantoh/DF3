@@ -293,3 +293,15 @@ body::before{
 }
 
 #leaderboardCard .cardTitle{ text-align:center; }
+
+/* Draggable admin overlays */
+.adminDrag{
+  position: fixed !important;
+  z-index: 30000 !important;
+  max-height: 92vh;
+  overflow: auto;
+  cursor: grab;
+}
+.adminDrag:active{ cursor: grabbing; }
+
+#matchPanel{ z-index: 20000 !important; }
