@@ -712,13 +712,14 @@ app.post("/api/fights/:code/vote-winner", authMiddleware, async (req,res)=>{
     // Archive into match_history
     const full = await query("SELECT * FROM fights WHERE code=$1", [code]);
     const f = full.rows[0];
-    await query(`INSERT INTO match_history(code, team_size, format, created_at, accepted_at, concluded_at, location, poster_ids, accepter_ids, poster_team_name, accepter_team_name, final_status, rating_delta)
-      VALUES ($1,$2,$3,$4,$5,NOW(),$6,$7,$8,$9,$10,$11,$12)
-      ON CONFLICT (code) DO NOTHING`,
-      [f.code, f.team_size, f.format, f.created_at, f.accepted_at, fight.location, f.poster_ids, f.accepter_ids, f.poster_team_name, f.accepter_team_name, winner==="POSTER"?"VICTORY":"DEFEAT", delta]
-    );
-
-    // Notify all participants
+    try{
+      await query(`INSERT INTO match_history(code, team_size, format, created_at, accepted_at, concluded_at, location, poster_ids, accepter_ids, poster_team_name, accepter_team_name, result, final_status, rating_delta)
+        VALUES ($1,$2,$3,$4,$5,NOW(),$6,$7,$8,$9,$10,$11,$12,$13)
+        ON CONFLICT (code) DO NOTHING`,
+        [f.code, f.team_size, f.format, f.created_at, f.accepted_at, f.location, f.poster_ids, f.accepter_ids, f.poster_team_name, f.accepter_team_name, winner, (winner==="DRAW"?"DRAW":"CONCLUDED"), delta]
+      );
+    }catch(e){ console.error("match_history insert failed", e); }
+// Notify all participants
     const participants = Array.from(new Set([...(fight.poster_ids||[]),...(fight.accepter_ids||[])]));
     for(const uid of participants){
       io.to(`user:${uid}`).emit("matchConcluded", { code, winner, delta });

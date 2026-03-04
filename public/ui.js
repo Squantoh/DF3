@@ -1,4 +1,6 @@
 const socket = io();
+function playOneShot(src){ try{ const a=new Audio(src); a.play().catch(()=>{});}catch{} }
+
 let OPEN_MATCH_CODE = null;
 
 async function api(path, opts = {}) {
@@ -358,6 +360,7 @@ socket.on("notification", async (notif)=>{
   if(notif?.type==="MATCH_READY"){
     startNotifyLoop();
     flashBrowserNotification("Rise of Agon PvP Finder","Match found!");
+    playOneShot("/audio/notify.wav");
     if(notif?.payload?.code){
       openMatchPanel(notif.payload.code);
       stopNotifyLoop();

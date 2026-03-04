@@ -289,3 +289,13 @@ function startCloseCountdown(){
     }
   },1000);
 }
+
+
+function playNarrator(result){
+  try{
+    const src = (result==="VICTORY") ? "/audio/df_narrator_victory.wav" : "/audio/df_narrator_defeat.wav";
+    const a=new Audio(src);
+    a.volume=1.0;
+    a.play().catch(()=>{});
+  }catch{}
+}
