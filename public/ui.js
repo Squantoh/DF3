@@ -1,4 +1,4 @@
-const BUILD_VERSION = "v28";
+const BUILD_VERSION = "v29";
 const socket = io();
 try{ const bv=document.getElementById("buildVersion"); if(bv) bv.textContent=BUILD_VERSION; }catch{}
 function playOneShot(src){ try{ const a=new Audio(src); a.play().catch(()=>{});}catch{} }
@@ -356,6 +356,14 @@ async function refreshNotifs(){
       }
     }
   }
+
+  // AUTO_OPEN_MATCH_READY: if a match-ready notification exists and match popup isn't open, open it automatically.
+  try{
+    if(!OPEN_MATCH_CODE){
+      const m = (notifs||[]).find(x=>x.type==="MATCH_READY" && (x.payload?.code));
+      if(m) openMatchPanel(m.payload.code);
+    }
+  }catch{}
 }
 
 socket.on("notification", async (notif)=>{
@@ -399,14 +407,25 @@ async function refreshLeaderboard(){
   const box=document.getElementById("leaderboard");
   if(!box) return;
   const data=await api("/api/leaderboard").catch(()=>({users:[]}));
-  const users=data.users||[];
+  const users=(data.users||[]).filter(u=>Number(u.rating||0) >= 50);
   box.innerHTML="";
   if(!users.length){ box.innerHTML=`<div class="tiny">No data yet.</div>`; return; }
-  for(let i=0;i<users.length;i++){
+
+  // #1 row
+  const top=users[0];
+  const topEl=el(`<div class="lbTop"><div class="rank">#1</div><div class="name">${escapeHtml(top.username)}</div><div class="rating">${escapeHtml(String(top.rating))}</div></div>`);
+  box.appendChild(topEl);
+
+  // 3-column grid for the rest
+  const grid=document.createElement("div");
+  grid.className="lbGrid";
+  for(let i=1;i<users.length;i++){
     const u=users[i];
-    const row=el(`<div class="item"><div><div class="title">#${i+1} ${escapeHtml(u.username)}</div><div class="meta">Rating: ${u.rating}</div></div></div>`);
-    box.appendChild(row);
+    const rank=i+1;
+    const cell=el(`<div class="lbCell"><div class="rank">#${rank}</div><div class="name">${escapeHtml(u.username)}</div><div class="rating">${escapeHtml(String(u.rating))}</div></div>`);
+    grid.appendChild(cell);
   }
+  box.appendChild(grid);
 }
 
 async function refreshAnnouncements(){

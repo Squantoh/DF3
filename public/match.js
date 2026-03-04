@@ -176,9 +176,23 @@ function setupWinnerVoting(){
       return;
     }
     if(data.concluded){
-      try{ startCloseCountdown(); }catch{}
-      msg.textContent="Match concluded."; 
-      loadFight();
+      try{
+        const reveal = await api(`/api/fights/${code}/reveal`);
+        const winnerSide = reveal.winner_team;
+        if(winnerSide && winnerSide!=="DRAW"){
+          const winnerName = winnerSide==="POSTER" ? (reveal.poster?.team_name||"Winner") : (reveal.accepter?.team_name||"Winner");
+          const loserName  = winnerSide==="POSTER" ? (reveal.accepter?.team_name||"Loser") : (reveal.poster?.team_name||"Loser");
+          addSystemLine(`Winner: ${winnerName}`);
+          addSystemLine(`Loser: ${loserName}`);
+          const myWin = (FIGHT.my_side===winnerSide);
+          playNarrator(myWin ? "VICTORY" : "DEFEAT");
+        } else {
+          addSystemLine("Result: DRAW");
+        }
+      }catch(e){}
+      addSystemLine("Match concluded, closing in 5 seconds...");
+      try{ winBtn.disabled=true; loseBtn.disabled=true; chatInput.disabled=true; sendBtn.disabled=true; }catch{}
+      startCloseCountdown();
       return;
     }
     // confirmation messages
