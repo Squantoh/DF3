@@ -1,4 +1,4 @@
-const BUILD_VERSION = "v29";
+const BUILD_VERSION = "v30";
 const socket = io();
 try{ const bv=document.getElementById("buildVersion"); if(bv) bv.textContent=BUILD_VERSION; }catch{}
 function playOneShot(src){ try{ const a=new Audio(src); a.play().catch(()=>{});}catch{} }
