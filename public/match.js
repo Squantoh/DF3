@@ -1,4 +1,5 @@
 const socket = io();
+let CONCLUDE_HANDLED=false;
 async function api(path, opts = {}) {
   const res = await fetch(path, { headers: { "Content-Type": "application/json" }, credentials: "include", ...opts });
   const data = await res.json().catch(() => ({}));
@@ -316,3 +317,31 @@ function playNarrator(result){
 
 
 document.addEventListener("DOMContentLoaded", ()=>{ init(); });
+
+
+socket.on("forceCloseMatch", (p)=>{
+  try{
+    if(!p || p.code!==code) return;
+    if(CONCLUDE_HANDLED) return;
+    CONCLUDE_HANDLED=true;
+
+    const outcome = String(p.outcome||"").toUpperCase();
+    const delta = Number(p.rating_delta||0);
+
+    const outcomeTxt = outcome==="VICTORY" ? "Victory" : "Defeat";
+    addSystemLine(`Result: ${outcomeTxt} (${delta>=0?'+':''}${delta} Rating)`);
+    if(p.location) addSystemLine(`Location: ${p.location}`);
+    if(Array.isArray(p.participants)){
+      const ppl = p.participants.map(x=>`${x.username} (${x.rating})`).join(", ");
+      addSystemLine(`Participants: ${ppl}`);
+    }
+
+    playNarrator(outcome==="VICTORY" ? "VICTORY" : "DEFEAT");
+    addSystemLine("Match concluded, closing in 5 seconds…");
+
+    try{ chatInput.disabled=true; sendBtn.disabled=true; }catch{}
+    startCloseCountdown();
+  }catch(e){
+    console.error("[forceCloseMatch handler]", e);
+  }
+});

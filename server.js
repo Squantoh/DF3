@@ -727,12 +727,37 @@ app.post("/api/fights/:code/vote-winner", authMiddleware, async (req,res)=>{
         [f.code, f.team_size, f.format, f.created_at, f.accepted_at, f.location, f.poster_ids, f.accepter_ids, f.poster_team_name, f.accepter_team_name, winner, (winner==="DRAW"?"DRAW":"CONCLUDED"), delta]
       );
     }catch(e){ console.error("match_history insert failed", e); }
-// Notify all participants
+// Notify all participants + remove MATCH_READY + add FIGHT_CONCLUDED notifications
     const participants = Array.from(new Set([...(fight.poster_ids||[]),...(fight.accepter_ids||[])]));
+    const usersR = await query("SELECT id, username, rating FROM users WHERE id = ANY($1)", [participants]);
+    const userMap = new Map(usersR.rows.map(r=>[r.id, r]));
+    const participantList = participants.map(id=>{
+      const u=userMap.get(id);
+      return u?{ username:u.username, rating:u.rating }: { username:"Unknown", rating:0 };
+    });
+
     for(const uid of participants){
-      io.to(`user:${uid}`).emit("matchConcluded", { code, winner, delta });
+      // remove "match found/open match" notification for this match
+      await query("DELETE FROM notifications WHERE user_id=$1 AND type='MATCH_READY' AND payload->>'code'=$2", [uid, code]);
+
+      const isWinner = (winner==="POSTER") ? (fight.poster_ids||[]).includes(uid) : (fight.accepter_ids||[]).includes(uid);
+      const outcome = isWinner ? "VICTORY" : "DEFEAT";
+      const signedDelta = isWinner ? delta : -delta;
+
+      const payload = {
+        code,
+        outcome,
+        rating_delta: signedDelta,
+        location: f.location || "",
+        participants: participantList,
+        at: new Date().toISOString()
+      };
+
+      await notifyUser(uid, "FIGHT_CONCLUDED", payload);
+      io.to(`user:${uid}`).emit("forceCloseMatch", payload);
     }
-    io.to(`match:${code}`).emit("winnerUpdate", { concluded:true, winner });
+
+io.to(`match:${code}`).emit("winnerUpdate", { concluded:true, winner });
     return res.json({ ok:true, concluded:true, winner });
   }
 
