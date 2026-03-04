@@ -285,3 +285,5 @@ body::before{
 .lbCell .rank{ font-size:12px; opacity:.9; }
 .lbCell .name{ font-size:13px; font-weight:600; }
 .lbCell .rating{ font-size:12px; opacity:.9; }
+
+.buildVersion{ font-size:12px; opacity:.85; margin-left:8px; }

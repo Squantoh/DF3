@@ -1,4 +1,6 @@
+const BUILD_VERSION = "v28";
 const socket = io();
+try{ const bv=document.getElementById("buildVersion"); if(bv) bv.textContent=BUILD_VERSION; }catch{}
 function playOneShot(src){ try{ const a=new Audio(src); a.play().catch(()=>{});}catch{} }
 
 let OPEN_MATCH_CODE = null;

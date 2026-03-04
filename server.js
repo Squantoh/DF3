@@ -15,6 +15,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+
+// Disable caching so deploys show immediately
+app.use((req,res,next)=>{
+  if(req.path.startsWith("/public") || req.path.endsWith(".js") || req.path.endsWith(".css") || req.path.endsWith(".html") || req.path.startsWith("/audio")){
+    res.setHeader("Cache-Control","no-store, max-age=0");
+  }
+  next();
+});
 const server = http.createServer(app);
 const io = new Server(server);
 
