@@ -1,4 +1,15 @@
-const BUILD_VERSION = "v30";
+const BUILD_VERSION = "v31";
+
+const AUTO_OPENED = new Set(JSON.parse(sessionStorage.getItem("autoOpenedMatches")||"[]"));
+const DISMISSED = new Set(JSON.parse(sessionStorage.getItem("dismissedMatches")||"[]"));
+function markAutoOpened(code){
+  AUTO_OPENED.add(code);
+  sessionStorage.setItem("autoOpenedMatches", JSON.stringify(Array.from(AUTO_OPENED)));
+}
+function markDismissed(code){
+  DISMISSED.add(code);
+  sessionStorage.setItem("dismissedMatches", JSON.stringify(Array.from(DISMISSED)));
+}
 const socket = io();
 try{ const bv=document.getElementById("buildVersion"); if(bv) bv.textContent=BUILD_VERSION; }catch{}
 function playOneShot(src){ try{ const a=new Audio(src); a.play().catch(()=>{});}catch{} }
@@ -372,8 +383,12 @@ socket.on("notification", async (notif)=>{
     flashBrowserNotification("Rise of Agon PvP Finder","Match found!");
     playOneShot("/audio/notify.wav");
     if(notif?.payload?.code){
-      openMatchPanel(notif.payload.code);
-      stopNotifyLoop();
+      const c = notif.payload.code;
+      if(!AUTO_OPENED.has(c) && !DISMISSED.has(c)){
+        openMatchPanel(c);
+        markAutoOpened(c);
+        stopNotifyLoop();
+      }
     }
   }
   if(notif?.type==="FIGHT_CONCLUDED"){
