@@ -1,33 +1,10 @@
 const socket = io();
-async function api(path, opts={}){
-  const res = await fetch(path, {
-    ...opts,
-    headers: { "Content-Type":"application/json", ...(opts.headers||{}) },
-    credentials: "include"
-  });
-  const ct = res.headers.get("content-type") || "";
-  let bodyText = "";
-  let data = null;
-  try{ bodyText = await res.text(); }catch{}
-  if(ct.includes("application/json")){
-    try{ data = JSON.parse(bodyText || "{}"); }catch{ data = {}; }
-  }
-  if(!res.ok){
-    const msg = (data && (data.error||data.message)) ? (data.error||data.message) : (bodyText || `HTTP_${res.status}`);
-    throw new Error(msg);
-  }
-  return data ?? bodyText;
+async function api(path, opts = {}) {
+  const res = await fetch(path, { headers: { "Content-Type": "application/json" }, credentials: "include", ...opts });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Request failed");
+  return data;
 }
-
-function showFatal(msg){
-  try{
-    const sub=document.getElementById("matchSub");
-    if(sub) sub.textContent = String(msg);
-  }catch{}
-}
-window.addEventListener("error",(e)=>{ showFatal(e.message || "Script error"); });
-window.addEventListener("unhandledrejection",(e)=>{ showFatal(e.reason?.message || String(e.reason||"Promise error")); });
-
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function addChatLine(who, whoClass, text, at){
   const log=document.getElementById("chatLog");
@@ -87,8 +64,7 @@ function startTimer(){
   }, 500);
 }
 async function loadFight(){
-  try{
-    const resp=await api(`/api/fights/${code}`);
+  const resp=await api(`/api/fights/${code}`);
   FIGHT = resp.fight || resp;
   socket.emit("joinFightRoom", { code, userId: ME.id });
   document.getElementById("location").textContent=(FIGHT.location || FIGHT.meetup_location || "Pending…");
@@ -100,10 +76,7 @@ async function loadFight(){
   if(Number(FIGHT.team_size)===1){ winBtn.textContent="I Won!"; loseBtn.textContent="I Lost"; }
   else { winBtn.textContent="We Won!"; loseBtn.textContent="We Lost"; }
 
-    if(FIGHT.status==="CONCLUDED") await showConcluded();
-  }catch(e){
-    showFatal(e.message || e);
-  }
+  if(FIGHT.status==="CONCLUDED") await showConcluded();
 }
 async function loadChatHistory(){
   const h=await api(`/api/fights/${code}/history`);
@@ -193,7 +166,7 @@ function setupWinnerVoting(){
   loseBtn.onclick=()=>vote("LOSS");
 
 
-  socket.on("winnerUpdate",(data)=>{
+  socket.on("winnerUpdate", async (data)=>{
     if(!data) return;
     if(data.conflict){
       hasVoted=false; setButtons(true);
@@ -340,3 +313,6 @@ function playNarrator(result){
     a.play().catch(()=>{});
   }catch{}
 }
+
+
+document.addEventListener("DOMContentLoaded", ()=>{ init(); });

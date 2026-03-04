@@ -186,10 +186,13 @@ function setupCreateFightUI(){
 function closeMatchPanel(concluded=false){
   const panel=document.getElementById("matchPanel");
   const frame=document.getElementById("matchFrame");
+  try{
+    if(OPEN_MATCH_CODE) markDismissed(OPEN_MATCH_CODE);
+  }catch{}
   panel.classList.add("hidden");
   frame.src="about:blank";
   stopNotifyLoop();
-  openedMatchCode = null;
+  OPEN_MATCH_CODE = null;
   if(concluded){ setTimeout(()=>location.reload(), 250); }
 }
 

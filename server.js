@@ -984,6 +984,17 @@ io.use((socket, next) => {
 });
 
 io.on("connection", (socket) => {
+  // Auto-auth from cookie if present (for match iframe)
+  try{
+    const ck = parseCookies(socket.handshake?.headers?.cookie);
+    const tok = ck.token;
+    if(tok){
+      const payload = jwt.verify(tok, JWT_SECRET);
+      socket.data.userId = payload.id;
+      socket.data.username = payload.username;
+      socket.join(`user:${payload.id}`);
+    }
+  }catch(e){}
   socket.on("auth", async (token) => {
     try {
       const payload = jwt.verify(token, JWT_SECRET);
@@ -994,6 +1005,13 @@ io.on("connection", (socket) => {
     } catch {
       socket.emit("authed", { ok: false });
     }
+  });
+
+  socket.on("joinUserRoom", async (id) => {
+    const userId = socket.data.userId;
+    if(!userId) return;
+    if(String(id)!==String(userId)) return;
+    socket.join(`user:${userId}`);
   });
 
   socket.on("joinFightRoom", async ({ code }) => {
