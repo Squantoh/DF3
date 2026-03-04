@@ -1,4 +1,3 @@
-const BUILD_VERSION = "v32";
 
 const AUTO_OPENED = new Set(JSON.parse(sessionStorage.getItem("autoOpenedMatches")||"[]"));
 const DISMISSED = new Set(JSON.parse(sessionStorage.getItem("dismissedMatches")||"[]"));
@@ -11,7 +10,6 @@ function markDismissed(code){
   sessionStorage.setItem("dismissedMatches", JSON.stringify(Array.from(DISMISSED)));
 }
 const socket = io();
-try{ const bv=document.getElementById("buildVersion"); if(bv) bv.textContent=BUILD_VERSION; }catch{}
 function playOneShot(src){ try{ const a=new Audio(src); a.play().catch(()=>{});}catch{} }
 
 let OPEN_MATCH_CODE = null;
@@ -202,6 +200,7 @@ function openMatchPanel(code){
   frame.src=url;
   panel.classList.remove("hidden");
   OPEN_MATCH_CODE = code;
+  try{ panel.dataset.matchCode = code; }catch{}
   try{ refreshNotifs(); }catch{}
   stopNotifyLoop();
   flashBrowserNotification("Rise of Agon PvP Finder", "Match opened.");
@@ -809,6 +808,19 @@ function makeDraggable(el, opts={}){
 setTimeout(()=>{
   try{
     const adminTools = document.getElementById("adminTools") || document.querySelector(".adminTools");
+    const drawer = document.getElementById("drawer") || document.querySelector(".drawer") || document.getElementById("adminDrawer") || document.querySelector(".adminDrawer");
+    const maybePanels = [adminTools, drawer].filter(Boolean);
+    for(const el of maybePanels){
+      el.classList.add("adminDrag");
+      // If element is pinned with right/left, reset so drag works
+      el.style.right = "auto";
+      el.style.bottom = "auto";
+      if(!el.style.left) el.style.left = "20px";
+      if(!el.style.top) el.style.top = "20px";
+      makeDraggable(el,{key: el.id || el.className || "adminPanel", handle: ".drawerHeader, .adminHeader, .cardTitle, h3, header"});
+    }
+  }catch{}
+}, 250);
     const drawer = document.getElementById("drawer") || document.querySelector(".drawer") || document.getElementById("adminDrawer") || document.querySelector(".adminDrawer");
     if(adminTools){
       adminTools.classList.add("adminDrag");

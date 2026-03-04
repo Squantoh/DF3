@@ -11,10 +11,26 @@ import { initSchema, query } from "./db.js";
 
 import crypto from "crypto";
 
+
+process.on("unhandledRejection",(err)=>{
+  console.error("[unhandledRejection]", err);
+});
+process.on("uncaughtException",(err)=>{
+  console.error("[uncaughtException]", err);
+});
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+
+app.use((req,res,next)=>{
+  const t=Date.now();
+  res.on('finish',()=>{
+    console.log(`[HTTP] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${Date.now()-t}ms)`);
+  });
+  next();
+});
 
 // Disable caching so deploys show immediately
 app.use((req,res,next)=>{
@@ -984,6 +1000,9 @@ io.use((socket, next) => {
 });
 
 io.on("connection", (socket) => {
+  console.log(`[SOCKET] connect ${socket.id} ip=${socket.handshake.address}`);
+  socket.on("error",(e)=>console.error("[SOCKET_ERROR]", e));
+  socket.on("disconnect",(r)=>console.log(`[SOCKET] disconnect ${socket.id} reason=${r}`));
   socket.on("auth", async (token) => {
     try {
       const payload = jwt.verify(token, JWT_SECRET);

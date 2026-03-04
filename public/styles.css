@@ -286,7 +286,6 @@ body::before{
 .lbCell .name{ font-size:13px; font-weight:600; }
 .lbCell .rating{ font-size:12px; opacity:.9; }
 
-.buildVersion{ font-size:12px; opacity:.85; margin-left:8px; }
 
 .drawer, #drawer, .adminDrawer, #adminDrawer {
   z-index: 9999 !important;
@@ -301,7 +300,14 @@ body::before{
   max-height: 92vh;
   overflow: auto;
   cursor: grab;
+  right: auto !important;
+  bottom: auto !important;
 }
 .adminDrag:active{ cursor: grabbing; }
 
+.adminDrag:active{ cursor: grabbing; }
+
 #matchPanel{ z-index: 20000 !important; }
+
+#drawer.adminDrag{ right:auto !important; }
+#adminTools.adminDrag{ right:auto !important; }
