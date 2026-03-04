@@ -311,3 +311,8 @@ body::before{
 
 #drawer.adminDrag{ right:auto !important; }
 #adminTools.adminDrag{ right:auto !important; }
+
+.meWL{ font-size:12px; opacity:.9; margin-top:6px; }
+
+.notifPager{ display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
+.smallBtn.selected{ outline:2px solid rgba(255,255,255,.35); }

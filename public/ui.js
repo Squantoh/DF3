@@ -827,3 +827,18 @@ setTimeout(()=>{
   }catch{}
 }, 250);
     
+function renderNotifPager(){
+  const pager = document.getElementById("notifPager");
+  if(!pager) return;
+  const totalPages = Math.max(1, Math.ceil(NOTIFS.length/NOTIFS_PER_PAGE));
+  pager.innerHTML = "";
+  if(totalPages<=1) return;
+  for(let i=0;i<totalPages;i++){
+    const b=document.createElement("button");
+    b.className="smallBtn"+(i===NOTIF_PAGE?" selected":"");
+    b.textContent=String(i+1);
+    b.onclick=()=>{ NOTIF_PAGE=i; renderNotifs();
+  renderNotifPager(); renderNotifPager(); };
+    pager.appendChild(b);
+  }
+}

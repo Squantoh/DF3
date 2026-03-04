@@ -146,6 +146,11 @@ export async function initSchema() {
   await query(`ALTER TABLE match_history ALTER COLUMN result SET DEFAULT 'DRAW'`);
   try { await query(`ALTER TABLE match_history ALTER COLUMN result SET NOT NULL`); } catch(e) {}
 
+
+  // Wins / losses tracking
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS wins INT DEFAULT 0`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS losses INT DEFAULT 0`);
+
 // Useful indexes
   await query(`CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id, created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_announcements_created ON announcements(created_at DESC);`);

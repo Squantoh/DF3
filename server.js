@@ -737,25 +737,23 @@ app.post("/api/fights/:code/vote-winner", authMiddleware, async (req,res)=>{
     });
 
     for(const uid of participants){
-      // remove "match found/open match" notification for this match
       await query("DELETE FROM notifications WHERE user_id=$1 AND type='MATCH_READY' AND payload->>'code'=$2", [uid, code]);
 
       const isWinner = (winner==="POSTER") ? (fight.poster_ids||[]).includes(uid) : (fight.accepter_ids||[]).includes(uid);
       const outcome = isWinner ? "VICTORY" : "DEFEAT";
       const signedDelta = isWinner ? delta : -delta;
 
-      const payload = {
-        code,
-        outcome,
-        rating_delta: signedDelta,
-        location: f.location || "",
-        participants: participantList,
-        at: new Date().toISOString()
-      };
+      if(winner!=="DRAW"){
+        if(isWinner) await query("UPDATE users SET wins = COALESCE(wins,0)+1 WHERE id=$1",[uid]);
+        else await query("UPDATE users SET losses = COALESCE(losses,0)+1 WHERE id=$1",[uid]);
+      }
 
+      const payload = { code, outcome, rating_delta: signedDelta, location: f.location || "", participants: participantList, at: new Date().toISOString() };
       await notifyUser(uid, "FIGHT_CONCLUDED", payload);
       io.to(`user:${uid}`).emit("forceCloseMatch", payload);
     }
+
+    io.to(`match:${code}`).emit("forceCloseMatch", { code, winner_team: winner, delta, location: f.location || "", participants: participantList });
 
 io.to(`match:${code}`).emit("winnerUpdate", { concluded:true, winner });
     return res.json({ ok:true, concluded:true, winner });
