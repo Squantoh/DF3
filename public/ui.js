@@ -14,25 +14,11 @@ function playOneShot(src){ try{ const a=new Audio(src); a.play().catch(()=>{});}
 
 let OPEN_MATCH_CODE = null;
 
-async function api(path, opts={}){
-  const url = path;
-  const res = await fetch(url, {
-    ...opts,
-    headers: {
-      "Content-Type":"application/json",
-      ...(opts.headers||{})
-    },
-    credentials: "same-origin"
-  });
-  if(!res.ok){
-    let txt = "";
-    try{ txt = await res.text(); }catch{}
-    console.error("[API_ERROR]", url, res.status, txt);
-    throw new Error(txt || `HTTP_${res.status}`);
-  }
-  const ct = res.headers.get("content-type") || "";
-  if(ct.includes("application/json")) return await res.json();
-  return await res.text();
+async function api(path, opts = {}) {
+  const res = await fetch(path, { headers: { "Content-Type": "application/json" }, credentials: "include", ...opts });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Request failed");
+  return data;
 }
 function el(html){ const d=document.createElement("div"); d.innerHTML=html.trim(); return d.firstChild; }
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
@@ -416,7 +402,7 @@ socket.on("notification", async (notif)=>{
   setupReport();
 });
 
-(async function init(){
+async function init(){
   await loadMe();
   setupCreateFightUI();
   await loadMyOpenFight();
@@ -428,7 +414,9 @@ socket.on("notification", async (notif)=>{
   setupReport();
   setInterval(refreshOpenFights, 5000);
   setInterval(refreshLeaderboard, 15000);
-})();
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{ init(); });
 
 
 async function refreshLeaderboard(){
