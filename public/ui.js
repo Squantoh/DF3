@@ -823,14 +823,4 @@ setTimeout(()=>{
     }
   }catch{}
 }, 250);
-    const drawer = document.getElementById("drawer") || document.querySelector(".drawer") || document.getElementById("adminDrawer") || document.querySelector(".adminDrawer");
-    if(adminTools){
-      adminTools.classList.add("adminDrag");
-      makeDraggable(adminTools,{key:"adminTools", handle:".adminHeader, .drawerHeader, .cardTitle, h3"});
-    }
-    if(drawer){
-      drawer.classList.add("adminDrag");
-      makeDraggable(drawer,{key:"adminDrawer", handle:".drawerHeader, .adminHeader, .cardTitle, h3"});
-    }
-  }catch{}
-}, 250);
+    

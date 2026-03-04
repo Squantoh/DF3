@@ -1,6 +1,6 @@
 {
   "name": "rise-of-agon-pvp-finder",
-  "version": "36.0.0",
+  "version": "37.0.0",
   "private": true,
   "main": "server.js",
   "scripts": {
