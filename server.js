@@ -191,7 +191,18 @@ app.get("/api/me", authMiddleware, async (req, res) => {
   const u = await getUserById(req.auth.id);
   if (!u || u.banned) return res.json({ authenticated: false });
   const rankQ = await query("SELECT COUNT(*)::int + 1 AS user_rank FROM users WHERE COALESCE(rating,0) > $1", [u.rating || 0]);
-  res.json({ authenticated: true, user: { id: u.id, username: u.username, team_name: u.team_name, rating: u.rating, wins: u.wins || 0, losses: u.losses || 0, rank: rankQ.rows[0]?.user_rank || 1 } });
+  res.json({
+    authenticated: true,
+    user: {
+      id: u.id,
+      username: u.username,
+      team_name: u.team_name,
+      rating: u.rating,
+      wins: u.wins || 0,
+      losses: u.losses || 0,
+      rank: rankQ.rows[0]?.user_rank || 1
+    }
+  });
 });
 
 app.post("/api/team-name", authMiddleware, async (req, res) => {
@@ -271,15 +282,7 @@ async function userHasActiveFight(userId) {
 
 
 // compatibility endpoints used by older UI
-app.get("/api/fights/open", async (req,res)=>{
-  let meId = null;
-  try{
-    const token = req.cookies?.token || req.headers.authorization?.replace("Bearer ", "");
-    if(token){
-      const payload = jwt.verify(token, JWT_SECRET);
-      meId = payload.id;
-    }
-  }catch{}
+app.get("/api/fights/open", authMiddleware, async (req,res)=>{
   const r = await query("SELECT code, team_size, format, expires_at, poster_ids, match_mode FROM fights WHERE status='OPEN' ORDER BY created_at DESC");
   const fights = r.rows || [];
   const allIds = Array.from(new Set(fights.flatMap(f=>f.poster_ids||[])));
@@ -288,12 +291,22 @@ app.get("/api/fights/open", async (req,res)=>{
     const u = await query("SELECT id, username FROM users WHERE id = ANY($1)", [allIds]);
     for(const row of u.rows) nameMap.set(row.id, row.username);
   }
+  const meId = req.auth.id;
   const out = fights.map(f=>{
     const posterIds = f.poster_ids || [];
-    const is_participant = !!meId && posterIds.includes(meId);
-    const is_mine = !!meId && posterIds.length ? posterIds[0] === meId : false;
+    const is_participant = posterIds.includes(meId);
+    const is_mine = posterIds.length ? posterIds[0] === meId : false;
     const creator_names = posterIds.map(id=>nameMap.get(id)).filter(Boolean);
-    return { code: f.code, team_size: f.team_size, format: f.format, open_expires_at: f.expires_at, is_participant, is_mine, creator_names, match_mode: f.match_mode || 'LAWLESS' };
+    return {
+      code: f.code,
+      team_size: f.team_size,
+      format: f.format,
+      open_expires_at: f.expires_at,
+      is_participant,
+      is_mine,
+      creator_names,
+      match_mode: f.match_mode || 'LAWLESS'
+    };
   });
   res.json({ fights: out });
 });
@@ -470,7 +483,7 @@ app.post("/api/fights/:code/accept", authMiddleware, async (req,res)=>{
     [accepterIds, location, endsAt, code]
   );
 
-  if(String(fight.match_mode||"LAWLESS").toUpperCase()==="LAWFUL"){
+    if(String(fight.match_mode||"LAWLESS").toUpperCase()==="LAWFUL"){
     await query("INSERT INTO match_messages(code, side, alias, text) VALUES ($1,'SYSTEM','Herald',$2)", [code, "This is a lawful match. Please coordinate with your opponent to pick a lawful village to billboard to to engage in combat. Good luck!"]);
   }
 

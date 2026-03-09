@@ -24,6 +24,7 @@ function el(html){ const d=document.createElement("div"); d.innerHTML=html.trim(
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
 let ME=null, chosenSize=1, myOpenFight=null;
+let MATCH_MODE='LAWLESS';
 let openedMatchCode=null;
 let IS_ADMIN=false;
 let notifyLoop=null, titleFlash=null, lastTitle=document.title;

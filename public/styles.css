@@ -322,8 +322,6 @@ body::before{
 }
 .matchesHeader h2{ margin:0; }
 
-.matchesHeader{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
-.matchesHeader h2{ margin:0; }
 .matchModes{ display:flex; gap:8px; margin:0 0 10px; }
 .btn.danger{ background: rgba(160,30,30,.9); }
 .btn.info{ background: rgba(30,70,160,.9); }
