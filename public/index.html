@@ -35,8 +35,6 @@
         <p class="hint">Pick a format.</p>
         <p class="hint" style="margin-top:-8px;">If it’s more than 1v1, list your teammates usernames (they must be registered on the website already).</p>
 
-        <div class="matchModes"><button id="matchModeLawless" class="btn danger selected">Lawless</button><button id="matchModeLawful" class="btn info">Lawful</button></div>
-
         <div class="row">
           <button class="btn selectBtn selected" data-size="1">1v1</button>
           <button class="btn selectBtn" data-size="2">2v2</button>
@@ -68,11 +66,9 @@
       </section>
 
       <section class="card">
-        <h2>Matches:</h2>
-        <div class="tiny hint">Match found alerts will flash + play sound until you open the match.</div>
+        <div class="matchesHeader"><h2>Matches:</h2><button id="matchHistoryBtn" class="btn small">Full Match History</button></div>
+        <div class="tiny hint">Current and previous matches will be displayed here.</div>
         <div id="notifs" class="list"></div>
-        <div id="notifPager" class="notifPager"></div>
-        <div class="row" style="justify-content:flex-end; margin-top:8px;"><button id="matchHistoryBtn" class="btn small">Full Match History</button></div>
       </section>
     </section>
 

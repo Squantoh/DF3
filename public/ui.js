@@ -90,10 +90,6 @@ function renderMe(){
           </div>
           <div class="tiny" id="authMsg"></div>
         `;
-        document.getElementById("u").addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ e.preventDefault(); document.getElementById("p").focus(); }});
-        document.getElementById("p").addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ e.preventDefault(); document.getElementById("go").click(); }});
-        document.getElementById("u").addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ e.preventDefault(); document.getElementById("p").focus(); }});
-        document.getElementById("p").addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ e.preventDefault(); document.getElementById("go").click(); }});
         document.getElementById("go").onclick=async()=>{
           const msg=document.getElementById("authMsg"); msg.textContent="";
           try{
@@ -116,8 +112,7 @@ function renderMe(){
         <div><strong>Team Name:</strong> <span id="teamNameText">${escapeHtml(ME.team_name || ("Team of " + ME.username))}</span></div>
       </div>
     </div>
-    <div class="tiny">${ME.wins||0} Wins, ${ME.losses||0} Losses</div>
-    <div class="tiny">Rating: ${ME.rating} (Rank #${ME.rank||"-"})</div>
+    <div class="tiny">Rating: ${ME.rating}</div>
     <div class="row" style="justify-content:flex-end;">
       <button class="btn small" id="logoutBtn">Logout</button>
     </div>
@@ -180,7 +175,7 @@ function setupCreateFightUI(){
       if(chosenSize>1){
         teammateUsernames=document.getElementById("teammates").value.split(",").map(s=>s.trim()).filter(Boolean);
       }
-      await api("/api/fights/create",{method:"POST", body: JSON.stringify({teamSize: chosenSize, teammateUsernames, match_mode: MATCH_MODE})});
+      await api("/api/fights/create",{method:"POST", body: JSON.stringify({teamSize: chosenSize, teammateUsernames})});
       createMsg.textContent="Listed.";
       await loadMyOpenFight();
       await refreshOpenFights();
@@ -239,9 +234,9 @@ async function refreshOpenFights(){
   for(const f of fights){
     const expMs=Date.parse(f.open_expires_at);
     const item=el(`
-      <div class="item fightCard ${mode==="LAWFUL"?"lawful":"lawless"}">
+      <div class="item">
         <div>
-          <div class="title">${f.team_size}v${f.team_size} - <span class="${mode==="LAWFUL"?"modeLawful":"modeLawless"}">${mode==="LAWFUL"?"Lawful":"Lawless"}</span></div>
+          <div class="title">${f.team_size}v${f.team_size}</div>
           <div class="meta"><span class="whoLine"></span></div>
           <div class="meta">Expires in: <span class="ttl">--:--</span></div>
         </div>
@@ -298,14 +293,12 @@ async function refreshNotifs(){
   if(!ME){ box.innerHTML=`<div class="tiny">Login to receive notifications.</div>`; return; }
   const data=await api("/api/notifications").catch(()=>({notifications:[]}));
   const notifs=data.notifications || [];
-  const pageItems = notifs.slice(NOTIF_PAGE*4, NOTIF_PAGE*4 + 4);
   box.innerHTML="";
   const pager=document.getElementById('notifPager');
   if(pager) pager.innerHTML='';
-  if(!notifs.length){ box.innerHTML=`<div class="tiny">No notifications yet.</div>`; renderNotifPager(0); return; }
-  renderNotifPager(notifs.length);
+  if(!notifs.length){ box.innerHTML=`<div class="tiny">No notifications yet.</div>`; return; }
 
-  for(const n of pageItems){
+  for(const n of notifs){
     const t=n.type, p=n.payload||{};
     const time=new Date(n.created_at).toLocaleString();
 
@@ -334,9 +327,9 @@ async function refreshNotifs(){
     if(t==="FIGHT_CONCLUDED"){
       const delta=Number(p.rating_delta||0);
       const deltaText = delta === 0 ? "(0 Rating)" : (delta > 0 ? `(+${delta} Rating)` : `(${delta} Rating)`);
-      const result=String(p.outcome||"DRAW");
+      const result=String(p.result||"DRAW");
       const loc=escapeHtml(p.location||"");
-      const participants=escapeHtml(Array.isArray(p.participants) ? p.participants.map(x=>`${x.username} (${x.rating})`).join(", ") : "");
+      const participants=escapeHtml((p.participants||[]).join(", "));
       const when=new Date(p.at||n.created_at).toLocaleString();
 
       box.appendChild(el(`
@@ -420,8 +413,6 @@ socket.on("notification", async (notif)=>{
 async function init(){
   await loadMe();
   setupCreateFightUI();
-  setupMatchModeUI();
-  setupMatchModeUI();
   await loadMyOpenFight();
   await refreshOpenFights();
   await refreshNotifs();
@@ -652,7 +643,7 @@ async function setupAdminTools(){
         const status=f.status || f.result || "OPEN";
         const stamp=f.concluded_at || f.created_at || f.accepted_at;
         const when=stamp ? new Date(stamp).toLocaleString() : "";
-        const item = el(`<div class="item fightCard ${mode==="LAWFUL"?"lawful":"lawless"}">
+        const item = el(`<div class="item">
           <div style="flex:1;">
             <div class="title">${escapeHtml(f.format || `${f.team_size}v${f.team_size}`)} <span class="tiny">(${escapeHtml(status)})</span></div>
             <div class="meta">Fight ID: <b>${escapeHtml(f.code)}</b> • ${escapeHtml(when)}</div>
@@ -677,7 +668,7 @@ async function setupAdminTools(){
       return;
     }
     for(const r of reps){
-      const item = el(`<div class="item fightCard ${mode==="LAWFUL"?"lawful":"lawless"}">
+      const item = el(`<div class="item">
         <div style="flex:1;">
           <div class="title">${escapeHtml(r.username)}</div>
           <div class="meta">${escapeHtml(new Date(r.created_at).toLocaleString())}</div>
@@ -841,36 +832,10 @@ setTimeout(()=>{
   }catch{}
 }, 250);
     
-function setupMatchModeUI(){
-  const lawless=document.getElementById("matchModeLawless");
-  const lawful=document.getElementById("matchModeLawful");
-  if(!lawless || !lawful) return;
-  const render=()=>{
-    lawless.classList.toggle("selected", MATCH_MODE==="LAWLESS");
-    lawful.classList.toggle("selected", MATCH_MODE==="LAWFUL");
-  };
-  lawless.onclick=()=>{ MATCH_MODE='LAWLESS'; render(); };
-  lawful.onclick=()=>{ MATCH_MODE='LAWFUL'; render(); };
-  render();
-}
-
-function renderNotifPager(){
-  const pager=document.getElementById("notifPager");
-  if(!pager) return;
-  const pages=Math.max(1, Math.ceil(NOTIFS.length/NOTIFS_PER_PAGE));
-  pager.innerHTML="";
-  if(pages<=1) return;
-  for(let i=0;i<pages;i++){
-    const b=document.createElement("button");
-    b.className="smallBtn"+(i===NOTIF_PAGE?" selected":"");
-    b.textContent=String(i+1);
-    b.onclick=()=>{ NOTIF_PAGE=i; renderNotifs();
-  renderNotifPager(); renderNotifPager(); };
-    pager.appendChild(b);
-  }
-}
 
 document.addEventListener("DOMContentLoaded", ()=>{
-  const hb=document.getElementById("matchHistoryBtn");
-  if(hb) hb.onclick=()=>window.open('/match-history.html', '_blank', 'width=1100,height=800');
+  const hb = document.getElementById("matchHistoryBtn");
+  if(hb){
+    hb.onclick = ()=>window.open('/match-history.html', '_blank', 'width=1100,height=800');
+  }
 });
