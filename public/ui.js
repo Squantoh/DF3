@@ -92,6 +92,8 @@ function renderMe(){
         `;
         document.getElementById("u").addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ e.preventDefault(); document.getElementById("p").focus(); }});
         document.getElementById("p").addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ e.preventDefault(); document.getElementById("go").click(); }});
+        document.getElementById("u").addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ e.preventDefault(); document.getElementById("p").focus(); }});
+        document.getElementById("p").addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ e.preventDefault(); document.getElementById("go").click(); }});
         document.getElementById("go").onclick=async()=>{
           const msg=document.getElementById("authMsg"); msg.textContent="";
           try{
@@ -114,7 +116,8 @@ function renderMe(){
         <div><strong>Team Name:</strong> <span id="teamNameText">${escapeHtml(ME.team_name || ("Team of " + ME.username))}</span></div>
       </div>
     </div>
-    <div class="tiny">Rating: ${ME.rating}</div>
+    <div class="tiny">${ME.wins||0} Wins, ${ME.losses||0} Losses</div>
+    <div class="tiny">Rating: ${ME.rating} (Rank #${ME.rank||"-"})</div>
     <div class="row" style="justify-content:flex-end;">
       <button class="btn small" id="logoutBtn">Logout</button>
     </div>
@@ -177,7 +180,7 @@ function setupCreateFightUI(){
       if(chosenSize>1){
         teammateUsernames=document.getElementById("teammates").value.split(",").map(s=>s.trim()).filter(Boolean);
       }
-      await api("/api/fights/create",{method:"POST", body: JSON.stringify({teamSize: chosenSize, teammateUsernames})});
+      await api("/api/fights/create",{method:"POST", body: JSON.stringify({teamSize: chosenSize, teammateUsernames, match_mode: MATCH_MODE})});
       createMsg.textContent="Listed.";
       await loadMyOpenFight();
       await refreshOpenFights();
@@ -236,9 +239,9 @@ async function refreshOpenFights(){
   for(const f of fights){
     const expMs=Date.parse(f.open_expires_at);
     const item=el(`
-      <div class="item">
+      <div class="item fightCard ${mode==="LAWFUL"?"lawful":"lawless"}">
         <div>
-          <div class="title">${f.team_size}v${f.team_size}</div>
+          <div class="title">${f.team_size}v${f.team_size} - <span class="${mode==="LAWFUL"?"modeLawful":"modeLawless"}">${mode==="LAWFUL"?"Lawful":"Lawless"}</span></div>
           <div class="meta"><span class="whoLine"></span></div>
           <div class="meta">Expires in: <span class="ttl">--:--</span></div>
         </div>
@@ -295,12 +298,14 @@ async function refreshNotifs(){
   if(!ME){ box.innerHTML=`<div class="tiny">Login to receive notifications.</div>`; return; }
   const data=await api("/api/notifications").catch(()=>({notifications:[]}));
   const notifs=data.notifications || [];
+  const pageItems = notifs.slice(NOTIF_PAGE*4, NOTIF_PAGE*4 + 4);
   box.innerHTML="";
   const pager=document.getElementById('notifPager');
   if(pager) pager.innerHTML='';
-  if(!notifs.length){ box.innerHTML=`<div class="tiny">No notifications yet.</div>`; return; }
+  if(!notifs.length){ box.innerHTML=`<div class="tiny">No notifications yet.</div>`; renderNotifPager(0); return; }
+  renderNotifPager(notifs.length);
 
-  for(const n of notifs){
+  for(const n of pageItems){
     const t=n.type, p=n.payload||{};
     const time=new Date(n.created_at).toLocaleString();
 
@@ -329,9 +334,9 @@ async function refreshNotifs(){
     if(t==="FIGHT_CONCLUDED"){
       const delta=Number(p.rating_delta||0);
       const deltaText = delta === 0 ? "(0 Rating)" : (delta > 0 ? `(+${delta} Rating)` : `(${delta} Rating)`);
-      const result=String(p.result||"DRAW");
+      const result=String(p.outcome||"DRAW");
       const loc=escapeHtml(p.location||"");
-      const participants=escapeHtml((p.participants||[]).join(", "));
+      const participants=escapeHtml(Array.isArray(p.participants) ? p.participants.map(x=>`${x.username} (${x.rating})`).join(", ") : "");
       const when=new Date(p.at||n.created_at).toLocaleString();
 
       box.appendChild(el(`
@@ -415,6 +420,7 @@ socket.on("notification", async (notif)=>{
 async function init(){
   await loadMe();
   setupCreateFightUI();
+  setupMatchModeUI();
   setupMatchModeUI();
   await loadMyOpenFight();
   await refreshOpenFights();

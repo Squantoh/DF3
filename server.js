@@ -190,7 +190,19 @@ app.post("/api/logout", (_req, res) => {
 app.get("/api/me", authMiddleware, async (req, res) => {
   const u = await getUserById(req.auth.id);
   if (!u || u.banned) return res.json({ authenticated: false });
-  res.json({ authenticated: true, user: { id: u.id, username: u.username, team_name: u.team_name, rating: u.rating } });
+  const rankQ = await query("SELECT COUNT(*)::int + 1 AS user_rank FROM users WHERE COALESCE(rating,0) > COALESCE($1,0)", [u.rating || 0]);
+  res.json({
+    authenticated: true,
+    user: {
+      id: u.id,
+      username: u.username,
+      team_name: u.team_name,
+      rating: u.rating,
+      wins: u.wins || 0,
+      losses: u.losses || 0,
+      rank: rankQ.rows[0]?.user_rank || 1
+    }
+  });
 });
 
 app.post("/api/team-name", authMiddleware, async (req, res) => {
@@ -292,7 +304,8 @@ app.get("/api/fights/open", authMiddleware, async (req,res)=>{
       open_expires_at: f.expires_at,
       is_participant,
       is_mine,
-      creator_names
+      creator_names,
+      match_mode: f.match_mode || 'LAWLESS'
     };
   });
   res.json({ fights: out });
@@ -314,6 +327,7 @@ app.post("/api/fights/create", authMiddleware, async (req,res)=>{
   if (await userHasActiveFight(u.id)) return res.status(400).json({ error: "You already have an active fight." });
 
   const teamSize = Number(req.body?.teamSize || 1);
+  const matchMode = String(req.body?.match_mode || "LAWLESS").toUpperCase()==="LAWFUL" ? "LAWFUL" : "LAWLESS";
   if (!Number.isFinite(teamSize) || teamSize < 1 || teamSize > 99) return res.status(400).json({ error: "invalid team size" });
 
   const teammateUsernames = Array.isArray(req.body?.teammateUsernames) ? req.body.teammateUsernames : [];
@@ -360,6 +374,7 @@ app.post("/api/fights", authMiddleware, async (req, res) => {
   if (await userHasActiveFight(u.id)) return res.status(400).json({ error: "You already have an active fight." });
 
   const teamSize = Number(req.body?.teamSize || 1);
+  const matchMode = String(req.body?.match_mode || "LAWLESS").toUpperCase()==="LAWFUL" ? "LAWFUL" : "LAWLESS";
   if (!Number.isFinite(teamSize) || teamSize < 1 || teamSize > 99) return res.status(400).json({ error: "invalid team size" });
 
   const teammateUsernames = Array.isArray(req.body?.teammateUsernames) ? req.body.teammateUsernames : [];
@@ -505,6 +520,7 @@ app.get("/api/fights/:code", authMiddleware, async (req,res)=>{
     team_size: fight.team_size,
     format: fight.format,
     status: fight.status,
+    match_mode: fight.match_mode || 'LAWLESS',
     match_mode: fight.match_mode || 'LAWLESS',
     location: fight.location,
     match_expires_at: fight.match_expires_at,
@@ -756,6 +772,11 @@ app.post("/api/fights/:code/vote-winner", authMiddleware, async (req,res)=>{
       const outcome = isWinner ? "VICTORY" : "DEFEAT";
       const signedDelta = isWinner ? delta : -delta;
 
+      if(winner!=="DRAW"){
+        if(isWinner) await query("UPDATE users SET wins = COALESCE(wins,0)+1 WHERE id=$1", [uid]);
+        else await query("UPDATE users SET losses = COALESCE(losses,0)+1 WHERE id=$1", [uid]);
+      }
+
       const payload = {
         code,
         outcome,
@@ -810,6 +831,8 @@ app.post("/api/fights/:code/extend", authMiddleware, async (req,res)=>{
     // apply extension
     const newEnd = new Date((fight.match_expires_at ? Date.parse(fight.match_expires_at) : Date.now()) + 15*60*1000);
     await query("UPDATE fights SET match_expires_at=$1, extension_count=extension_count+1, poster_extend=FALSE, accepter_extend=FALSE WHERE code=$2", [newEnd.toISOString(), code]);
+    await query("INSERT INTO match_messages(code, side, alias, text) VALUES ($1,'SYSTEM','Herald',$2)", [code, "Granted 15 minute match extension."]);
+    io.to(`match:${code}`).emit("chat", { side:"SYSTEM", alias:"Herald", text:"Granted 15 minute match extension.", at:new Date().toISOString() });
     io.to(`match:${code}`).emit("extended", { match_ends_at: newEnd.toISOString() });
     return res.json({ ok:true, match_ends_at: newEnd.toISOString() });
   }
