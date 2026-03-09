@@ -90,6 +90,8 @@ function renderMe(){
           </div>
           <div class="tiny" id="authMsg"></div>
         `;
+        document.getElementById("p").addEventListener("keydown",(e)=>{ if(e.key==="Enter") document.getElementById("go").click(); });
+        document.getElementById("u").addEventListener("keydown",(e)=>{ if(e.key==="Tab"){} });
         document.getElementById("go").onclick=async()=>{
           const msg=document.getElementById("authMsg"); msg.textContent="";
           try{
@@ -413,6 +415,7 @@ socket.on("notification", async (notif)=>{
 async function init(){
   await loadMe();
   setupCreateFightUI();
+  setupMatchModeUI();
   await loadMyOpenFight();
   await refreshOpenFights();
   await refreshNotifs();
@@ -643,7 +646,7 @@ async function setupAdminTools(){
         const status=f.status || f.result || "OPEN";
         const stamp=f.concluded_at || f.created_at || f.accepted_at;
         const when=stamp ? new Date(stamp).toLocaleString() : "";
-        const item = el(`<div class="item">
+        const item = el(`<div class="item fightCard ${mode==="LAWFUL"?"lawful":"lawless"}">
           <div style="flex:1;">
             <div class="title">${escapeHtml(f.format || `${f.team_size}v${f.team_size}`)} <span class="tiny">(${escapeHtml(status)})</span></div>
             <div class="meta">Fight ID: <b>${escapeHtml(f.code)}</b> • ${escapeHtml(when)}</div>
@@ -668,7 +671,7 @@ async function setupAdminTools(){
       return;
     }
     for(const r of reps){
-      const item = el(`<div class="item">
+      const item = el(`<div class="item fightCard ${mode==="LAWFUL"?"lawful":"lawless"}">
         <div style="flex:1;">
           <div class="title">${escapeHtml(r.username)}</div>
           <div class="meta">${escapeHtml(new Date(r.created_at).toLocaleString())}</div>
@@ -832,3 +835,38 @@ setTimeout(()=>{
   }catch{}
 }, 250);
     
+
+function setupMatchModeUI(){
+  const lawless=document.getElementById("matchModeLawless");
+  const lawful=document.getElementById("matchModeLawful");
+  if(!lawless || !lawful) return;
+  const render=()=>{
+    lawless.classList.toggle("selected", MATCH_MODE==="LAWLESS");
+    lawful.classList.toggle("selected", MATCH_MODE==="LAWFUL");
+  };
+  lawless.onclick=()=>{ MATCH_MODE="LAWLESS"; render(); };
+  lawful.onclick=()=>{ MATCH_MODE="LAWFUL"; render(); };
+  render();
+}
+
+
+function renderNotifPager(){
+  const pager=document.getElementById("notifPager");
+  if(!pager) return;
+  const pages=Math.max(1, Math.ceil(NOTIFS.length/NOTIFS_PER_PAGE));
+  pager.innerHTML="";
+  if(pages<=1) return;
+  for(let i=0;i<pages;i++){
+    const b=document.createElement("button");
+    b.className="smallBtn"+(i===NOTIF_PAGE?" selected":"");
+    b.textContent=String(i+1);
+    b.onclick=()=>{ NOTIF_PAGE=i; renderNotifs();
+  renderNotifPager(); renderNotifPager(); };
+    pager.appendChild(b);
+  }
+}
+
+document.addEventListener("DOMContentLoaded", ()=>{
+  const hb=document.getElementById("matchHistoryBtn");
+  if(hb) hb.onclick=()=>{ NOTIF_PAGE=Math.max(0, Math.ceil(NOTIFS.length/NOTIFS_PER_PAGE)-1); renderNotifs(); renderNotifPager(); };
+});

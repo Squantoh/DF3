@@ -313,3 +313,15 @@ body::before{
 #adminTools.adminDrag{ right:auto !important; }
 
 .concludeBanner{padding:10px 12px;margin:0 0 10px;border:1px solid rgba(255,255,255,.16);border-radius:10px;background:rgba(0,0,0,.55);text-align:center;font-weight:700;}
+
+.matchModes{ display:flex; gap:8px; margin:0 0 10px; }
+.btn.danger{ background: rgba(160,30,30,.9); }
+.btn.info{ background: rgba(30,70,160,.9); }
+.btn.selected{ outline:2px solid rgba(255,255,255,.45); }
+.modeLawful{ color:#7db1ff; }
+.modeLawless{ color:#ff7d7d; }
+.fightCard.lawful{ border-color: rgba(80,120,255,.45); background: rgba(20,40,90,.28); }
+.fightCard.lawless{ border-color: rgba(255,80,80,.45); background: rgba(90,20,20,.22); }
+.meWL{ font-size:12px; opacity:.9; margin-top:6px; }
+.notifPager{ display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+.smallBtn.selected{ outline:2px solid rgba(255,255,255,.35); }
