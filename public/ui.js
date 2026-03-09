@@ -205,6 +205,13 @@ function openMatchPanel(code){
   const panel=document.getElementById("matchPanel");
   const frame=document.getElementById("matchFrame");
   const url=`/match/${code}`;
+  panel.style.left = "50%";
+  panel.style.top = "50%";
+  panel.style.right = "auto";
+  panel.style.bottom = "auto";
+  panel.style.transform = "translate(-50%, -50%)";
+  panel.style.width = "80vw";
+  panel.style.height = "80vh";
   frame.src=url;
   panel.classList.remove("hidden");
   OPEN_MATCH_CODE = code;

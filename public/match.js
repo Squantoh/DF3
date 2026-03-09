@@ -161,8 +161,9 @@ async function sendChat(){
   const text = chatInput.value.trim();
   if (!text) return;
   try{
-    socket.emit("chat", { text });
+    await api(`/api/fights/${code}/chat`, { method:"POST", body: JSON.stringify({ text }) });
     chatInput.value = "";
+    try{ await loadChatHistory(); }catch{}
   }catch(e){
     chatLockMsg.textContent = e.message || "Chat failed";
   }
