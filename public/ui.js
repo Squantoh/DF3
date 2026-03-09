@@ -90,6 +90,8 @@ function renderMe(){
           </div>
           <div class="tiny" id="authMsg"></div>
         `;
+        document.getElementById("u").addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ e.preventDefault(); document.getElementById("p").focus(); }});
+        document.getElementById("p").addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ e.preventDefault(); document.getElementById("go").click(); }});
         document.getElementById("go").onclick=async()=>{
           const msg=document.getElementById("authMsg"); msg.textContent="";
           try{
@@ -112,7 +114,8 @@ function renderMe(){
         <div><strong>Team Name:</strong> <span id="teamNameText">${escapeHtml(ME.team_name || ("Team of " + ME.username))}</span></div>
       </div>
     </div>
-    <div class="tiny">Rating: ${ME.rating}</div>
+    <div class="tiny">${ME.wins||0} Wins, ${ME.losses||0} Losses</div>
+    <div class="tiny">Rating: ${ME.rating} (Rank #${ME.rank||"-"})</div>
     <div class="row" style="justify-content:flex-end;">
       <button class="btn small" id="logoutBtn">Logout</button>
     </div>
@@ -175,7 +178,7 @@ function setupCreateFightUI(){
       if(chosenSize>1){
         teammateUsernames=document.getElementById("teammates").value.split(",").map(s=>s.trim()).filter(Boolean);
       }
-      await api("/api/fights/create",{method:"POST", body: JSON.stringify({teamSize: chosenSize, teammateUsernames})});
+      await api("/api/fights/create",{method:"POST", body: JSON.stringify({teamSize: chosenSize, teammateUsernames, match_mode: MATCH_MODE})});
       createMsg.textContent="Listed.";
       await loadMyOpenFight();
       await refreshOpenFights();
@@ -233,10 +236,11 @@ async function refreshOpenFights(){
 
   for(const f of fights){
     const expMs=Date.parse(f.open_expires_at);
+    const mode = String(f.match_mode||"LAWLESS").toUpperCase();
     const item=el(`
-      <div class="item">
+      <div class="item fightCard ${mode==="LAWFUL"?"lawful":"lawless"}">
         <div>
-          <div class="title">${f.team_size}v${f.team_size}</div>
+          <div class="title">${f.team_size}v${f.team_size} - <span class="${mode==="LAWFUL"?"modeLawful":"modeLawless"}">${mode==="LAWFUL"?"Lawful":"Lawless"}</span></div>
           <div class="meta"><span class="whoLine"></span></div>
           <div class="meta">Expires in: <span class="ttl">--:--</span></div>
         </div>
@@ -291,7 +295,7 @@ async function refreshOpenFights(){
 async function refreshNotifs(){
   const box=document.getElementById("notifs");
   if(!ME){ box.innerHTML=`<div class="tiny">Login to receive notifications.</div>`; return; }
-  const data=await api("/api/notifications").catch(()=>({notifications:[]}));
+  const data=await api("/api/notifications?page=1&pageSize=4").catch(()=>({notifications:[]}));
   const notifs=data.notifications || [];
   box.innerHTML="";
   const pager=document.getElementById('notifPager');
@@ -327,16 +331,16 @@ async function refreshNotifs(){
     if(t==="FIGHT_CONCLUDED"){
       const delta=Number(p.rating_delta||0);
       const deltaText = delta === 0 ? "(0 Rating)" : (delta > 0 ? `(+${delta} Rating)` : `(${delta} Rating)`);
-      const result=String(p.result||"DRAW");
+      const result=String(p.outcome||p.result||"DRAW");
       const loc=escapeHtml(p.location||"");
-      const participants=escapeHtml((p.participants||[]).join(", "));
+      const participants=escapeHtml(Array.isArray(p.participants) ? p.participants.map(x=>`${x.username} (${x.rating})`).join(", ") : "");
       const when=new Date(p.at||n.created_at).toLocaleString();
 
       box.appendChild(el(`
         <div class="item">
           <div>
             <div class="title">⚔️Match Concluded⚔️</div>
-            <div class="meta">Result: ${escapeHtml(result)} ${escapeHtml(deltaText)}</div>
+            <div class="meta">Result: ${escapeHtml(result === "VICTORY" ? "Victory" : result === "DEFEAT" ? "Defeat" : "Draw")} ${escapeHtml(deltaText)}</div>
             <div class="meta">Location: ${loc}</div>
             <div class="meta">Participants: ${participants}</div>
             <div class="meta">${escapeHtml(when)}</div>
@@ -413,6 +417,7 @@ socket.on("notification", async (notif)=>{
 async function init(){
   await loadMe();
   setupCreateFightUI();
+  setupMatchModeUI();
   await loadMyOpenFight();
   await refreshOpenFights();
   await refreshNotifs();
@@ -839,3 +844,16 @@ document.addEventListener("DOMContentLoaded", ()=>{
     hb.onclick = ()=>window.open('/match-history.html', '_blank', 'width=1100,height=800');
   }
 });
+
+function setupMatchModeUI(){
+  const lawless=document.getElementById("matchModeLawless");
+  const lawful=document.getElementById("matchModeLawful");
+  if(!lawless || !lawful) return;
+  const render=()=>{
+    lawless.classList.toggle("selected", MATCH_MODE==="LAWLESS");
+    lawful.classList.toggle("selected", MATCH_MODE==="LAWFUL");
+  };
+  lawless.onclick=()=>{ MATCH_MODE='LAWLESS'; render(); };
+  lawful.onclick=()=>{ MATCH_MODE='LAWFUL'; render(); };
+  render();
+}

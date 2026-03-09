@@ -74,14 +74,14 @@ function signToken(user) {
 }
 
 async function getUserById(id) {
-  const r = await query("SELECT id, username, username_lc, team_name, rating, banned, password_hash FROM users WHERE id=$1", [id]);
+  const r = await query("SELECT id, username, username_lc, team_name, rating, wins, losses, banned, password_hash FROM users WHERE id=$1", [id]);
   return r.rows[0] || null;
 }
 
 async function getUserByUsernameCI(username) {
   const lc = String(username || "").trim().toLowerCase();
   if (!lc) return null;
-  const r = await query("SELECT id, username, username_lc, team_name, rating, banned, password_hash FROM users WHERE username_lc=$1", [lc]);
+  const r = await query("SELECT id, username, username_lc, team_name, rating, wins, losses, banned, password_hash FROM users WHERE username_lc=$1", [lc]);
   return r.rows[0] || null;
 }
 
@@ -190,7 +190,19 @@ app.post("/api/logout", (_req, res) => {
 app.get("/api/me", authMiddleware, async (req, res) => {
   const u = await getUserById(req.auth.id);
   if (!u || u.banned) return res.json({ authenticated: false });
-  res.json({ authenticated: true, user: { id: u.id, username: u.username, team_name: u.team_name, rating: u.rating } });
+  const rankQ = await query("SELECT COUNT(*)::int + 1 AS user_rank FROM users WHERE COALESCE(rating,0) > $1", [u.rating || 0]);
+  res.json({
+    authenticated: true,
+    user: {
+      id: u.id,
+      username: u.username,
+      team_name: u.team_name,
+      rating: u.rating,
+      wins: u.wins || 0,
+      losses: u.losses || 0,
+      rank: rankQ.rows[0]?.user_rank || 1
+    }
+  });
 });
 
 app.post("/api/team-name", authMiddleware, async (req, res) => {
@@ -271,7 +283,7 @@ async function userHasActiveFight(userId) {
 
 // compatibility endpoints used by older UI
 app.get("/api/fights/open", authMiddleware, async (req,res)=>{
-  const r = await query("SELECT code, team_size, format, expires_at, poster_ids FROM fights WHERE status='OPEN' ORDER BY created_at DESC");
+  const r = await query("SELECT code, team_size, format, expires_at, poster_ids, match_mode FROM fights WHERE status='OPEN' ORDER BY created_at DESC");
   const fights = r.rows || [];
   const allIds = Array.from(new Set(fights.flatMap(f=>f.poster_ids||[])));
   const nameMap = new Map();
@@ -292,7 +304,8 @@ app.get("/api/fights/open", authMiddleware, async (req,res)=>{
       open_expires_at: f.expires_at,
       is_participant,
       is_mine,
-      creator_names
+      creator_names,
+      match_mode: f.match_mode || 'LAWLESS'
     };
   });
   res.json({ fights: out });
@@ -314,6 +327,7 @@ app.post("/api/fights/create", authMiddleware, async (req,res)=>{
   if (await userHasActiveFight(u.id)) return res.status(400).json({ error: "You already have an active fight." });
 
   const teamSize = Number(req.body?.teamSize || 1);
+  const matchMode = String(req.body?.match_mode || "LAWLESS").toUpperCase()==="LAWFUL" ? "LAWFUL" : "LAWLESS";
   if (!Number.isFinite(teamSize) || teamSize < 1 || teamSize > 99) return res.status(400).json({ error: "invalid team size" });
 
   const teammateUsernames = Array.isArray(req.body?.teammateUsernames) ? req.body.teammateUsernames : [];
@@ -339,8 +353,8 @@ app.post("/api/fights/create", authMiddleware, async (req,res)=>{
   const expiresAt = nowPlusMinutes(30);
 
   await query(
-    "INSERT INTO fights(code, team_size, format, status, created_at, expires_at, poster_ids, poster_team_name) VALUES ($1,$2,$3,'OPEN',NOW(),$4,$5,$6)",
-    [code, teamSize, format, expiresAt, ids, u.team_name]
+    "INSERT INTO fights(code, team_size, format, status, created_at, expires_at, poster_ids, poster_team_name, match_mode) VALUES ($1,$2,$3,'OPEN',NOW(),$4,$5,$6,$7)",
+    [code, teamSize, format, expiresAt, ids, u.team_name, matchMode]
   );
 
   res.json({ ok: true, code });
@@ -458,7 +472,7 @@ app.post("/api/fights/:code/accept", authMiddleware, async (req,res)=>{
 
   // Choose location
   const LOCS = ["South of Simiran","West of Hintenfau","North of White View","West of Ottenhal","South West of Espenhal","North of Tolenque","South of Hintenfau","South of Ottenhal"];
-  const location = LOCS[Math.floor(Math.random()*LOCS.length)];
+  const location = String(fight.match_mode||"LAWLESS").toUpperCase()==="LAWFUL" ? "Lawful Village" : LOCS[Math.floor(Math.random()*LOCS.length)];
 
   const endsAt = new Date(Date.now() + 30*60*1000).toISOString();
 
@@ -467,6 +481,10 @@ app.post("/api/fights/:code/accept", authMiddleware, async (req,res)=>{
     "UPDATE fights SET status='MATCHED', accepter_ids=$1, accepted_at=NOW(), location=$2, match_expires_at=$3 WHERE code=$4",
     [accepterIds, location, endsAt, code]
   );
+
+  if(String(fight.match_mode||"LAWLESS").toUpperCase()==="LAWFUL"){
+    await query("INSERT INTO match_messages(code, side, alias, text) VALUES ($1,'SYSTEM','Herald',$2)", [code, "This is a lawful match. Please coordinate with your opponent to pick a lawful village to billboard to to engage in combat. Good luck!"]);
+  }
 
   // notify all participants
   const participantIds = Array.from(new Set([...(fight.poster_ids||[]), ...accepterIds]));
@@ -501,6 +519,7 @@ app.get("/api/fights/:code", authMiddleware, async (req,res)=>{
     team_size: fight.team_size,
     format: fight.format,
     status: fight.status,
+    match_mode: fight.match_mode || 'LAWLESS',
     location: fight.location,
     match_expires_at: fight.match_expires_at,
     poster_team_name: fight.poster_team_name,
@@ -647,13 +666,18 @@ app.get("/api/fights/:code/reveal", authMiddleware, async (req,res)=>{
   const allowed = await isUserInFight(req.auth.id, fight) || (me && isAdmin(me.username));
   if(!allowed) return res.status(403).json({ error:"Not a participant" });
 
-  const posterUsers = (await query("SELECT username, team_name FROM users WHERE id = ANY($1)", [fight.poster_ids||[]])).rows;
-  const accepterUsers = (await query("SELECT username, team_name FROM users WHERE id = ANY($1)", [fight.accepter_ids||[]])).rows;
+  const posterUsers = (await query("SELECT username, team_name, rating FROM users WHERE id = ANY($1)", [fight.poster_ids||[]])).rows;
+  const accepterUsers = (await query("SELECT username, team_name, rating FROM users WHERE id = ANY($1)", [fight.accepter_ids||[]])).rows;
 
   const winner_team = (fight.result==="DRAW"||fight.final_status==="DRAW") ? "DRAW" : (fight.result==="POSTER" ? "POSTER" : (fight.result==="ACCEPTER" ? "ACCEPTER" : null));
 
+  const participants = [...posterUsers.map(x=>({username:x.username, rating:x.rating||0})), ...accepterUsers.map(x=>({username:x.username, rating:x.rating||0}))];
+  const my_side = (fight.poster_ids||[]).includes(req.auth.id) ? 'POSTER' : ((fight.accepter_ids||[]).includes(req.auth.id) ? 'ACCEPTER' : 'ADMIN');
   res.json({
     meetup_location: fight.location,
+    location: fight.location,
+    my_side,
+    participants,
     winner_team,
     rating_delta: fight.rating_delta || 0,
     poster: { team_name: fight.poster_team_name || (posterUsers[0]?.team_name||"Team"), usernames: posterUsers.map(x=>x.username) },
@@ -679,6 +703,8 @@ app.post("/api/fights/:code/vote-winner", authMiddleware, async (req,res)=>{
 
   const col = isPoster ? "poster_confirm" : "accepter_confirm";
   await query(`UPDATE fights SET ${col}=$1 WHERE code=$2`, [vote, code]);
+  await query("INSERT INTO match_messages(code, side, alias, text) VALUES ($1,'SYSTEM','Herald',$2)", [code, 'Please confirm match has concluded by confirming a loss or victory.']);
+  io.to(`match:${code}`).emit('chat', { side:'SYSTEM', alias:'Herald', text:'Please confirm match has concluded by confirming a loss or victory.', at:new Date().toISOString() });
 
   // Reload
   const r2 = await query("SELECT poster_confirm, accepter_confirm FROM fights WHERE code=$1", [code]);
@@ -743,6 +769,11 @@ app.post("/api/fights/:code/vote-winner", authMiddleware, async (req,res)=>{
       const isWinner = (winner==="POSTER") ? (fight.poster_ids||[]).includes(uid) : (fight.accepter_ids||[]).includes(uid);
       const outcome = isWinner ? "VICTORY" : "DEFEAT";
       const signedDelta = isWinner ? delta : -delta;
+
+      if(winner!=="DRAW"){
+        if(isWinner) await query("UPDATE users SET wins = COALESCE(wins,0)+1 WHERE id=$1", [uid]);
+        else await query("UPDATE users SET losses = COALESCE(losses,0)+1 WHERE id=$1", [uid]);
+      }
 
       const payload = {
         code,
