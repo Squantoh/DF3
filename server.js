@@ -744,11 +744,6 @@ app.post("/api/fights/:code/vote-winner", authMiddleware, async (req,res)=>{
       const outcome = isWinner ? "VICTORY" : "DEFEAT";
       const signedDelta = isWinner ? delta : -delta;
 
-      if(winner!=="DRAW"){
-        if(isWinner) await query("UPDATE users SET wins = COALESCE(wins,0)+1 WHERE id=$1", [uid]);
-        else await query("UPDATE users SET losses = COALESCE(losses,0)+1 WHERE id=$1", [uid]);
-      }
-
       const payload = {
         code,
         outcome,
@@ -1014,25 +1009,6 @@ io.use((socket, next) => {
 });
 
 io.on("connection", (socket) => {
-  try{
-    // Auto-auth socket from token cookie so match iframe can receive per-user events
-    const cookie = socket.request?.headers?.cookie || "";
-    const m = cookie.match(/(?:^|;\s*)token=([^;]+)/);
-    if(m){
-      const token = decodeURIComponent(m[1]);
-      (async()=>{
-        try{
-          const sRes = await query("SELECT user_id FROM sessions WHERE token=$1", [token]);
-          const uid = sRes.rows[0]?.user_id;
-          if(uid){
-            socket.data.userId = uid;
-            socket.join(`user:${uid}`);
-          }
-        }catch(e){ console.error("[SOCKET_AUTH]", e); }
-      })();
-    }
-  }catch(e){ console.error("[SOCKET_AUTH_OUTER]", e); }
-
   // Auto-auth from cookie if present (for match iframe)
   try{
     const ck = parseCookies(socket.handshake?.headers?.cookie);

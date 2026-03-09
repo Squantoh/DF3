@@ -1,374 +1,301 @@
 const socket = io();
-let CONCLUDE_HANDLED=false;
+const code = String(location.pathname.split("/").pop() || "");
+
+let FIGHT = null;
+let matchEndsAtMs = null;
+let timerInterval = null;
+let hasVoted = false;
+let closeCountdown = null;
+let concludeHandled = false;
+
+const locationEl = document.getElementById("location");
+const timerEl = document.getElementById("timer");
+const extendBtn = document.getElementById("extendBtn");
+const extendMsg = document.getElementById("extendMsg");
+const winnerMsg = document.getElementById("winnerMsg");
+const voteWinBtn = document.getElementById("voteWin");
+const voteLoseBtn = document.getElementById("voteLose");
+const chatLog = document.getElementById("chatLog");
+const chatInput = document.getElementById("chatInput");
+const sendChatBtn = document.getElementById("sendChat");
+const chatLockMsg = document.getElementById("chatLockMsg");
+const matchSub = document.getElementById("matchSub");
+const concludeBanner = document.getElementById("concludeBanner");
+
 async function api(path, opts = {}) {
-  const res = await fetch(path, { headers: { "Content-Type": "application/json" }, credentials: "include", ...opts });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || "Request failed");
-  return data;
+  const res = await fetch(path, {
+    credentials: "include",
+    headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
+    ...opts
+  });
+  const ct = res.headers.get("content-type") || "";
+  let body;
+  if (ct.includes("application/json")) {
+    body = await res.json().catch(() => ({}));
+  } else {
+    body = await res.text().catch(() => "");
+  }
+  if (!res.ok) {
+    const msg = typeof body === "string" ? body : (body.error || "Request failed");
+    throw new Error(msg || "Request failed");
+  }
+  return body;
 }
-function escapeHtml(s){ return String(s).replace(/[&<>"']/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+function escapeHtml(s){
+  return String(s ?? "").replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[c]));
+}
+
 function addChatLine(who, whoClass, text, at){
-  const log=document.getElementById("chatLog");
-  const div=document.createElement("div");
-  div.className="msg";
-  div.innerHTML=`<div class="who ${whoClass}">${escapeHtml(who)} • ${new Date(at).toLocaleTimeString()}</div><div>${escapeHtml(text)}</div>`;
-  log.appendChild(div);
-  log.scrollTop=log.scrollHeight;
-}
-function addSystemLine(text){ addChatLine("Herald","sys",text,new Date().toISOString()); }
-function getCode(){ const parts=location.pathname.split("/"); return String(parts[parts.length-1]||""); }
-function playOnce(url){ try{ const a=new Audio(url); a.play().catch(()=>{}); }catch{} }
-
-async function ensureBrowserNotificationPermission(){
-  if(!("Notification" in window)) return false;
-  if(Notification.permission==="granted") return true;
-  if(Notification.permission==="denied") return false;
-  const perm=await Notification.requestPermission().catch(()=> "denied");
-  return perm==="granted";
-}
-async function flashBrowserNotification(title, body){
-  const ok=await ensureBrowserNotificationPermission(); if(!ok) return;
-  try{ new Notification(title,{body}); }catch{}
-}
-function formatRemaining(ms){
-  ms=Math.max(0,ms);
-  const s=Math.floor(ms/1000), m=Math.floor(s/60), r=s%60;
-  return `${String(m).padStart(2,"0")}:${String(r).padStart(2,"0")}`;
+  const div = document.createElement("div");
+  div.className = "msg";
+  div.innerHTML = `<div class="who ${whoClass}">${escapeHtml(who)} • ${new Date(at || Date.now()).toLocaleTimeString()}</div><div>${escapeHtml(text)}</div>`;
+  chatLog.appendChild(div);
+  chatLog.scrollTop = chatLog.scrollHeight;
 }
 
-let ME=null, FIGHT=null, hasVoted=false;
-const code=getCode();
-let timerIv=null, matchEndsAtMs=null;
+function addSystemLine(text){
+  addChatLine("Herald", "sys", text, new Date().toISOString());
+}
 
-async function loadMe(){
-  const data=await api("/api/me").catch(()=>({authenticated:false}));
-  if(!data.authenticated){ alert("Login required."); location.href="/"; return; }
-  ME=data.user;
-  socket.emit("joinUserRoom", ME.id);
-  document.getElementById("meBox").innerHTML=`<div><strong>${escapeHtml(ME.username)}</strong></div><div class="tiny">Rating: ${ME.rating}</div>`;
-}
-function setChatLocked(locked){
-  const input=document.getElementById("chatInput");
-  const btn=document.getElementById("sendChat");
-  const msg=document.getElementById("chatLockMsg");
-  if(locked){ input.disabled=true; btn.disabled=true; msg.textContent="Chat is sealed. This match has concluded."; }
-  else { input.disabled=false; btn.disabled=false; msg.textContent=""; }
-}
-function startTimer(){
-  const el=document.getElementById("timer");
-  if(timerIv) clearInterval(timerIv);
-  timerIv=setInterval(async()=>{
-    if(!matchEndsAtMs){ el.textContent="--:--"; return; }
-    const ms=matchEndsAtMs - Date.now();
-    el.textContent=formatRemaining(ms);
-    if(ms<=0){ try{ await loadFight(); }catch{} }
-  }, 500);
-}
-async function loadFight(){
-  const resp=await api(`/api/fights/${code}`);
-  FIGHT = resp.fight || resp;
-  socket.emit("joinFightRoom", { code, userId: ME.id });
-  document.getElementById("location").textContent=(FIGHT.location || FIGHT.meetup_location || "Pending…");
-  setChatLocked(!!FIGHT.chat_locked);
-  matchEndsAtMs = (FIGHT.match_expires_at || FIGHT.match_ends_at) ? Date.parse(FIGHT.match_expires_at || FIGHT.match_ends_at) : null;
-
-  const winBtn=document.getElementById("voteWin");
-  const loseBtn=document.getElementById("voteLose");
-  if(Number(FIGHT.team_size)===1){ winBtn.textContent="I Won!"; loseBtn.textContent="I Lost"; }
-  else { winBtn.textContent="We Won!"; loseBtn.textContent="We Lost"; }
-
-  if(FIGHT.status==="CONCLUDED") await showConcluded();
-}
-async function loadChatHistory(){
-  const h=await api(`/api/fights/${code}/history`);
-  for(const m of (h.chat_log||[])){
-    const whoClass=(m.side==="SYSTEM")?"sys":((m.side===FIGHT.my_side)?"green":"red");
-    addChatLine(m.alias||"Unknown", whoClass, m.text, m.at);
-  }
-  setChatLocked(!!h.chat_locked);
-}
-async function showConcluded(){
-  const msg=document.getElementById("winnerMsg");
+function playNarrator(kind){
   try{
-    const details=await api(`/api/fights/${code}/reveal`);
-    const posterTeamName=details.poster.team_name;
-    const accepterTeamName=details.accepter.team_name;
-    const posterUsers=details.poster.usernames.join(", ");
-    const accepterUsers=details.accepter.usernames.join(", ");
-    document.getElementById("matchSub").textContent =
-      `${posterTeamName} (${posterUsers}) vs ${accepterTeamName} (${accepterUsers}) • Location: ${details.meetup_location}`;
-
-    if(details.winner_team==="DRAW"){ msg.textContent="Concluded. Result: DRAW."; }
-    else{
-      msg.textContent="Concluded.";
-      const myWin=(details.winner_team===FIGHT.my_side);
-      playOnce(myWin?"/audio/df_narrator_victory.wav":"/audio/df_narrator_defeat.wav");
-    }
-
-    document.getElementById("voteWin").disabled=true;
-    document.getElementById("voteLose").disabled=true;
-    document.getElementById("extendBtn").disabled=true;
-    setChatLocked(true);
-
-    try{
-      if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ type:"MATCH_CONCLUDED", code }, "*");
-      }
-    }catch{}
-  }catch{
-    msg.textContent="Concluded.";
-    setChatLocked(true);
-    try{
-      if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ type:"MATCH_CONCLUDED", code }, "*");
-      }
-    }catch{}
-  }
-}
-
-function setupChat(){
-  const input=document.getElementById("chatInput");
-  document.getElementById("sendChat").onclick=()=>{
-    const text=input.value.trim();
-    if(!text) return;
-    socket.emit("chat",{text});
-    input.value="";
-    try{ input.focus(); }catch{}
-  };
-  input.addEventListener("keydown",(e)=>{ if(e.key==="Enter") document.getElementById("sendChat").click(); });
-  socket.on("chat",(msg)=>{
-    const whoClass=(msg.side==="SYSTEM")?"sys":((msg.side===FIGHT.my_side)?"green":"red");
-    addChatLine(msg.alias, whoClass, msg.text, msg.at);
-    if(msg.side && msg.side !== "SYSTEM" && msg.side !== FIGHT.my_side){
-      playOnce("/audio/chat.wav");
-    }
-  });
-}
-
-function setupWinnerVoting(){
-  const msg=document.getElementById("winnerMsg");
-  const winBtn=document.getElementById("voteWin");
-  const loseBtn=document.getElementById("voteLose");
-  const card=document.getElementById("winnerCard");
-  const setButtons=(on)=>{ winBtn.disabled=!on; loseBtn.disabled=!on; };
-
-  async function vote(outcome){
-    if(hasVoted) return;
-    try{
-      hasVoted=true; setButtons(false);
-      msg.textContent="Waiting on opponent to confirm loss or victory…";
-      const out=await api(`/api/fights/${code}/vote-winner`,{method:"POST", body: JSON.stringify({vote: outcome})});
-      if(out.concluded){ msg.textContent="Agreement reached. Sealing the record…"; await loadFight(); }
-      if(out.reset){ hasVoted=false; setButtons(true); msg.textContent="A winner must be decided. Select again."; }
-    }catch(e){ hasVoted=false; setButtons(true); msg.textContent=e.message; }
-  }
-
-  winBtn.onclick=()=>vote("WIN");
-  loseBtn.onclick=()=>vote("LOSS");
-
-
-  socket.on("winnerUpdate",(data)=>{});
-      msg.textContent="A winner must be decided. Select again.";
-      card.classList.add("nudge");
-      setTimeout(()=>card.classList.remove("nudge"), 900);
-      return;
-    }
-    if(data.concluded){
-      try{
-        const reveal = await api(`/api/fights/${code}/reveal`);
-        const winnerSide = reveal.winner_team;
-        if(winnerSide && winnerSide!=="DRAW"){
-          const winnerName = winnerSide==="POSTER" ? (reveal.poster?.team_name||"Winner") : (reveal.accepter?.team_name||"Winner");
-          const loserName  = winnerSide==="POSTER" ? (reveal.accepter?.team_name||"Loser") : (reveal.poster?.team_name||"Loser");
-          addSystemLine(`Winner: ${winnerName}`);
-          addSystemLine(`Loser: ${loserName}`);
-          const myWin = (FIGHT.my_side===winnerSide);
-          playNarrator(myWin ? "VICTORY" : "DEFEAT");
-        } else {
-          addSystemLine("Result: DRAW");
-        }
-      }catch(e){}
-      addSystemLine("Match concluded, closing in 5 seconds...");
-      try{ winBtn.disabled=true; loseBtn.disabled=true; chatInput.disabled=true; sendBtn.disabled=true; }catch{}
-      startCloseCountdown();
-      return;
-    }
-    // confirmation messages
-    if(data.poster_confirm){
-      const isMine = FIGHT.my_side==="POSTER";
-      addSystemLine(isMine ? `Your team has confirmed a ${data.poster_confirm==="WIN"?"WIN":"LOSS"}.` : `The enemy team has confirmed a ${data.poster_confirm==="WIN"?"WIN":"LOSS"}.`);
-    }
-    if(data.accepter_confirm){
-      const isMine = FIGHT.my_side==="ACCEPTER";
-      addSystemLine(isMine ? `Your team has confirmed a ${data.accepter_confirm==="WIN"?"WIN":"LOSS"}.` : `The enemy team has confirmed a ${data.accepter_confirm==="WIN"?"WIN":"LOSS"}.`);
-    }
-    // nudge if opponent voted
-    if((data.poster_confirm && FIGHT.my_side!=="POSTER") || (data.accepter_confirm && FIGHT.my_side!=="ACCEPTER")){
-      if(!winBtn.disabled && !loseBtn.disabled){
-        card.classList.add("nudge");
-        flashBrowser();
-        setTimeout(()=>card.classList.remove("nudge"), 900);
-      }
-    }
-  });
-
-
-  socket.on("voteReset", ()=>{ hasVoted=false; setButtons(true); msg.textContent="A winner must be decided. Select again."; });
-
-  socket.on("teamConfirmed",(data)=>{
-    if(!data?.side||!data?.outcome) return;
-    const isMine=(data.side===FIGHT.my_side);
-    const outcome=(data.outcome==="WIN")?"a WIN":"a LOSS";
-    addSystemLine(isMine ? `Your team has confirmed ${outcome}.` : `The enemy team has confirmed ${outcome}.`);
-  });
-
-  socket.on("winnerVoteNudge",(data)=>{
-    if(!data?.from_side) return;
-    if(data.from_side !== FIGHT.my_side && !winBtn.disabled && !loseBtn.disabled){
-      card.classList.add("nudge");
-      flashBrowserNotification("Rise of Agon PvP Finder","Enemy reported result — confirm win/loss.");
-      playOnce("/audio/notify.wav");
-      setTimeout(()=>card.classList.remove("nudge"), 4500);
-    }
-  });
-
-  socket.on("fightConcluded", async (data)=>{
-    if(data?.code !== code) return;
-    await loadFight();
-    await showConcluded();
-  });
-}
-
-function setupExtend(){
-  const btn=document.getElementById("extendBtn");
-  const msg=document.getElementById("extendMsg");
-  btn.onclick=async()=>{
-    try{
-      btn.disabled=true;
-      msg.textContent="Waiting for the other team to confirm extension…";
-      const out=await api(`/api/fights/${code}/extend`,{method:"POST"});
-      if(out.match_ends_at) matchEndsAtMs=Date.parse(out.match_ends_at);
-    }catch(e){
-      btn.disabled=false;
-      msg.textContent=e.message;
-    }
-  };
-
-  socket.on("extendRequested",(data)=>{
-    if(!data?.side) return;
-    const isMine=(data.side===FIGHT.my_side);
-    addSystemLine(isMine ? "Your team requested a timer extension." : "The enemy team requested a timer extension.");
-    if(!isMine){
-      flashBrowserNotification("Rise of Agon PvP Finder","Enemy requested timer extension.");
-      playOnce("/audio/notify.wav");
-    }
-  });
-
-  socket.on("extended",(data)=>{
-    msg.textContent="Extension granted.";
-    btn.disabled=false;
-    if(data?.match_ends_at) matchEndsAtMs=Date.parse(data.match_ends_at);
-    if(data?.match_expires_at) matchEndsAtMs=Date.parse(data.match_expires_at);
-  });
-}
-
-(async function init(){
-  await loadMe();
-  await loadFight();
-  await loadChatHistory();
-  startTimer();
-  setupChat();
-  try{ document.getElementById("chatInput")?.focus(); }catch{}
-  setupWinnerVoting();
-  setupExtend();
-  setTimeout(()=>{ try{ document.getElementById('chatInput').focus(); }catch{} }, 150);
-})();
-
-
-function startCloseCountdown(){
-  const banner=document.getElementById("concludeBanner");
-  const n=document.getElementById("concludeCountdown");
-  if(!banner||!n) return;
-  banner.classList.remove("hidden");
-  let t=5;
-  n.textContent=String(t);
-  const iv=setInterval(()=>{
-    t-=1;
-    n.textContent=String(t);
-    if(t<=0){
-      clearInterval(iv);
-      try{ window.parent.postMessage({type:"CLOSE_MATCH", code}, "*"); }catch{}
-    }
-  },1000);
-}
-
-
-function playNarrator(result){
-  try{
-    const src = (result==="VICTORY") ? "/audio/df_narrator_victory.wav" : "/audio/df_narrator_defeat.wav";
-    const a=new Audio(src);
-    a.volume=1.0;
+    const src = kind === "VICTORY" ? "/audio/df_narrator_victory.wav" : "/audio/df_narrator_defeat.wav";
+    const a = new Audio(src);
     a.play().catch(()=>{});
   }catch{}
 }
 
-
-document.addEventListener("DOMContentLoaded", ()=>{ init(); });
-
-
-socket.on("forceCloseMatch",(p)=>{
+function playChatSound(){
   try{
-    if(!p || p.code!==code) return;
-    if(window.__concludeHandled) return;
-    window.__concludeHandled=true;
+    const a = new Audio("/audio/chat.wav");
+    a.play().catch(()=>{});
+  }catch{}
+}
 
-    const outcome = String(p.outcome||"DRAW").toUpperCase();
-    const delta = Number(p.rating_delta||0);
-    const outcomeTxt = outcome==="VICTORY" ? "Victory" : (outcome==="DEFEAT" ? "Defeat" : "Draw");
+function setChatLocked(locked){
+  chatInput.disabled = !!locked;
+  sendChatBtn.disabled = !!locked;
+  chatLockMsg.textContent = locked ? "Chat is locked because the match has concluded." : "";
+}
 
-    addSystemLine(`Result: ${outcomeTxt} (${delta>=0?"+":""}${delta} Rating)`);
-    if(p.location) addSystemLine(`Location: ${p.location}`);
-    if(Array.isArray(p.participants)){
-      const ppl = p.participants.map(x=>`${x.username} (${x.rating})`).join(", ");
-      addSystemLine(`Participants: ${ppl}`);
+function renderTimer(){
+  if (!matchEndsAtMs) {
+    timerEl.textContent = "--:--";
+    return;
+  }
+  const ms = Math.max(0, matchEndsAtMs - Date.now());
+  const total = Math.floor(ms / 1000);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  timerEl.textContent = `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+}
+
+function startTimer(){
+  if (timerInterval) clearInterval(timerInterval);
+  renderTimer();
+  timerInterval = setInterval(renderTimer, 1000);
+}
+
+function startCloseCountdown(){
+  if (closeCountdown) clearInterval(closeCountdown);
+  let secs = 5;
+  concludeBanner.textContent = `Match concluded, closing in ${secs} seconds…`;
+  concludeBanner.classList.remove("hidden");
+  closeCountdown = setInterval(()=>{
+    secs -= 1;
+    concludeBanner.textContent = `Match concluded, closing in ${secs} seconds…`;
+    if (secs <= 0) {
+      clearInterval(closeCountdown);
+      window.parent.postMessage({ type: "CLOSE_MATCH", code }, "*");
     }
+  }, 1000);
+}
 
-    if(outcome==="VICTORY") playNarrator("VICTORY");
-    if(outcome==="DEFEAT") playNarrator("DEFEAT");
+async function loadFight(){
+  const resp = await api(`/api/fights/${code}`);
+  FIGHT = resp.fight || resp;
 
-    addSystemLine("Match concluded, closing in 5 seconds…");
-    try{ chatInput.disabled=true; sendBtn.disabled=true; }catch{}
+  locationEl.textContent = FIGHT.location || "Pending…";
+  matchEndsAtMs = FIGHT.match_expires_at ? Date.parse(FIGHT.match_expires_at) : null;
+  startTimer();
 
-    let secs=5;
-    concludeBanner.textContent = `Match concluded, closing in ${secs} seconds`;
-    concludeBanner.classList.remove("hidden");
+  if (Number(FIGHT.team_size || 1) === 1) {
+    voteWinBtn.textContent = "I Won!";
+    voteLoseBtn.textContent = "I Lost";
+  } else {
+    voteWinBtn.textContent = "We Won!";
+    voteLoseBtn.textContent = "We Lost";
+  }
 
-    const t=setInterval(()=>{
-      secs -= 1;
-      concludeBanner.textContent = `Match concluded, closing in ${secs} seconds`;
-      if(secs<=0){
-        clearInterval(t);
-        try{ window.parent.postMessage({type:"CLOSE_MATCH", code}, "*"); }catch{}
-      }
-    },1000);
-  }catch(e){ console.error("[forceCloseMatch]", e); }
-});
-    const delta = Number(p.rating_delta||0);
+  if (FIGHT.status === "CONCLUDED" || FIGHT.status === "ARCHIVED") {
+    await showConcluded();
+  }
+}
 
-    const outcomeTxt = outcome==="VICTORY" ? "Victory" : "Defeat";
-    addSystemLine(`Result: ${outcomeTxt} (${delta>=0?'+':''}${delta} Rating)`);
-    if(p.location) addSystemLine(`Location: ${p.location}`);
-    if(Array.isArray(p.participants)){
-      const ppl = p.participants.map(x=>`${x.username} (${x.rating})`).join(", ");
-      addSystemLine(`Participants: ${ppl}`);
-    }
+async function loadChatHistory(){
+  const h = await api(`/api/fights/${code}/history`);
+  chatLog.innerHTML = "";
+  for (const m of (h.chat_log || [])) {
+    const whoClass = (m.side === "SYSTEM") ? "sys" : ((m.side === FIGHT?.my_side) ? "green" : "red");
+    addChatLine(m.alias || "Unknown", whoClass, m.text, m.at);
+  }
+  setChatLocked(!!h.chat_locked);
+}
 
-    playNarrator(outcome==="VICTORY" ? "VICTORY" : "DEFEAT");
-    addSystemLine("Match concluded, closing in 5 seconds…");
+async function showConcluded(){
+  try{
+    const details = await api(`/api/fights/${code}/reveal`);
+    const posterTeamName = details.poster?.team_name || "Poster Team";
+    const accepterTeamName = details.accepter?.team_name || "Accepter Team";
+    const posterUsers = (details.poster?.usernames || []).join(", ");
+    const accepterUsers = (details.accepter?.usernames || []).join(", ");
+    matchSub.textContent = `${posterTeamName} (${posterUsers}) vs ${accepterTeamName} (${accepterUsers}) • Location: ${details.meetup_location || ""}`;
+  }catch{}
+  setChatLocked(true);
+}
 
-    try{ chatInput.disabled=true; sendBtn.disabled=true; }catch{}
-    startCloseCountdown();
+async function sendChat(){
+  const text = chatInput.value.trim();
+  if (!text) return;
+  try{
+    socket.emit("chat", { text });
+    chatInput.value = "";
   }catch(e){
-    console.error("[forceCloseMatch handler]", e);
+    chatLockMsg.textContent = e.message || "Chat failed";
+  }
+}
+
+async function vote(outcome){
+  if (hasVoted) return;
+  try{
+    hasVoted = true;
+    voteWinBtn.disabled = true;
+    voteLoseBtn.disabled = true;
+    winnerMsg.textContent = "Waiting on opponent to confirm loss or victory…";
+    const out = await api(`/api/fights/${code}/vote-winner`, {
+      method: "POST",
+      body: JSON.stringify({ vote: outcome })
+    });
+
+    if (out.conflict) {
+      hasVoted = false;
+      voteWinBtn.disabled = false;
+      voteLoseBtn.disabled = false;
+      winnerMsg.textContent = "A winner must be decided. Select again.";
+    }
+  }catch(e){
+    hasVoted = false;
+    voteWinBtn.disabled = false;
+    voteLoseBtn.disabled = false;
+    winnerMsg.textContent = e.message || "Request failed";
+  }
+}
+
+async function extendMatch(){
+  try{
+    extendBtn.disabled = true;
+    extendMsg.textContent = "Waiting for other team to confirm extension…";
+    const out = await api(`/api/fights/${code}/extend`, { method: "POST", body: "{}" });
+    if (out.match_ends_at) {
+      matchEndsAtMs = Date.parse(out.match_ends_at);
+      startTimer();
+      extendMsg.textContent = "Timer extended.";
+    } else if (out.waiting) {
+      extendMsg.textContent = "Waiting for other team to confirm extension…";
+    } else if (out.capped) {
+      extendMsg.textContent = "Extension cap reached.";
+    } else {
+      extendMsg.textContent = "Extension requested.";
+    }
+  }catch(e){
+    extendMsg.textContent = e.message || "Match not active";
+  }finally{
+    setTimeout(()=>{ extendBtn.disabled = false; }, 800);
+  }
+}
+
+function wireUI(){
+  voteWinBtn.onclick = ()=>vote("WIN");
+  voteLoseBtn.onclick = ()=>vote("LOSS");
+  extendBtn.onclick = extendMatch;
+  sendChatBtn.onclick = sendChat;
+  chatInput.addEventListener("keydown", (e)=>{
+    if (e.key === "Enter") sendChat();
+  });
+}
+
+function wireSocket(){
+  socket.emit("joinFightRoom", { code });
+  socket.emit("joinMatch", code);
+
+  socket.on("chat", (msg)=>{
+    const whoClass = (msg.side === "SYSTEM") ? "sys" : ((msg.side === FIGHT?.my_side) ? "green" : "red");
+    addChatLine(msg.alias || "Unknown", whoClass, msg.text, msg.at);
+    if (msg.side && msg.side !== "SYSTEM" && msg.side !== FIGHT?.my_side) {
+      playChatSound();
+    }
+  });
+
+  socket.on("extended", (data)=>{
+    if (data?.match_ends_at) {
+      matchEndsAtMs = Date.parse(data.match_ends_at);
+      startTimer();
+      extendMsg.textContent = "Timer extended.";
+    }
+  });
+
+  socket.on("winnerUpdate", (data)=>{
+    if (!data) return;
+    if (data.conflict) {
+      hasVoted = false;
+      voteWinBtn.disabled = false;
+      voteLoseBtn.disabled = false;
+      winnerMsg.textContent = "A winner must be decided. Select again.";
+    }
+  });
+
+  socket.on("forceCloseMatch", (p)=>{
+    try{
+      if (!p || p.code !== code) return;
+      if (concludeHandled) return;
+      concludeHandled = true;
+
+      const outcome = String(p.outcome || "DRAW").toUpperCase();
+      const delta = Number(p.rating_delta || 0);
+      const outcomeTxt = outcome === "VICTORY" ? "Victory" : (outcome === "DEFEAT" ? "Defeat" : "Draw");
+
+      addSystemLine(`Result: ${outcomeTxt} (${delta >= 0 ? "+" : ""}${delta} Rating)`);
+      if (p.location) addSystemLine(`Location: ${p.location}`);
+      if (Array.isArray(p.participants)) {
+        const ppl = p.participants.map(x => `${x.username} (${x.rating})`).join(", ");
+        addSystemLine(`Participants: ${ppl}`);
+      }
+
+      if (outcome === "VICTORY") playNarrator("VICTORY");
+      if (outcome === "DEFEAT") playNarrator("DEFEAT");
+
+      addSystemLine("Match concluded, closing in 5 seconds…");
+      setChatLocked(true);
+      winnerMsg.textContent = "Match concluded.";
+      startCloseCountdown();
+    }catch(e){
+      console.error("[forceCloseMatch]", e);
+    }
+  });
+}
+
+window.addEventListener("DOMContentLoaded", async ()=>{
+  wireUI();
+  wireSocket();
+  try{
+    await loadFight();
+    await loadChatHistory();
+  }catch(e){
+    matchSub.textContent = e.message || "Failed to load match";
+    locationEl.textContent = "Loading…";
+    timerEl.textContent = "--:--";
   }
 });
