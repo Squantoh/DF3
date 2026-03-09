@@ -737,6 +737,7 @@ app.post("/api/fights/:code/vote-winner", authMiddleware, async (req,res)=>{
     });
 
     for(const uid of participants){
+      // remove "match found/open match" notification for this match
       await query("DELETE FROM notifications WHERE user_id=$1 AND type='MATCH_READY' AND payload->>'code'=$2", [uid, code]);
 
       const isWinner = (winner==="POSTER") ? (fight.poster_ids||[]).includes(uid) : (fight.accepter_ids||[]).includes(uid);
@@ -744,16 +745,22 @@ app.post("/api/fights/:code/vote-winner", authMiddleware, async (req,res)=>{
       const signedDelta = isWinner ? delta : -delta;
 
       if(winner!=="DRAW"){
-        if(isWinner) await query("UPDATE users SET wins = COALESCE(wins,0)+1 WHERE id=$1",[uid]);
-        else await query("UPDATE users SET losses = COALESCE(losses,0)+1 WHERE id=$1",[uid]);
+        if(isWinner) await query("UPDATE users SET wins = COALESCE(wins,0)+1 WHERE id=$1", [uid]);
+        else await query("UPDATE users SET losses = COALESCE(losses,0)+1 WHERE id=$1", [uid]);
       }
 
-      const payload = { code, outcome, rating_delta: signedDelta, location: f.location || "", participants: participantList, at: new Date().toISOString() };
+      const payload = {
+        code,
+        outcome,
+        rating_delta: signedDelta,
+        location: f.location || "",
+        participants: participantList,
+        at: new Date().toISOString()
+      };
+
       await notifyUser(uid, "FIGHT_CONCLUDED", payload);
       io.to(`user:${uid}`).emit("forceCloseMatch", payload);
     }
-
-    io.to(`match:${code}`).emit("forceCloseMatch", { code, winner_team: winner, delta, location: f.location || "", participants: participantList });
 
 io.to(`match:${code}`).emit("winnerUpdate", { concluded:true, winner });
     return res.json({ ok:true, concluded:true, winner });
@@ -1007,6 +1014,25 @@ io.use((socket, next) => {
 });
 
 io.on("connection", (socket) => {
+  try{
+    // Auto-auth socket from token cookie so match iframe can receive per-user events
+    const cookie = socket.request?.headers?.cookie || "";
+    const m = cookie.match(/(?:^|;\s*)token=([^;]+)/);
+    if(m){
+      const token = decodeURIComponent(m[1]);
+      (async()=>{
+        try{
+          const sRes = await query("SELECT user_id FROM sessions WHERE token=$1", [token]);
+          const uid = sRes.rows[0]?.user_id;
+          if(uid){
+            socket.data.userId = uid;
+            socket.join(`user:${uid}`);
+          }
+        }catch(e){ console.error("[SOCKET_AUTH]", e); }
+      })();
+    }
+  }catch(e){ console.error("[SOCKET_AUTH_OUTER]", e); }
+
   // Auto-auth from cookie if present (for match iframe)
   try{
     const ck = parseCookies(socket.handshake?.headers?.cookie);

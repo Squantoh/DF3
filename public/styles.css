@@ -316,3 +316,6 @@ body::before{
 
 .notifPager{ display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
 .smallBtn.selected{ outline:2px solid rgba(255,255,255,.35); }
+
+.concludeBanner{ padding:10px 12px; margin-bottom:8px; border:1px solid rgba(255,255,255,.18); border-radius:10px; background:rgba(0,0,0,.55); text-align:center; font-weight:700; }
+.hidden{ display:none !important; }

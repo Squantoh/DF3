@@ -167,39 +167,7 @@ function setupWinnerVoting(){
   loseBtn.onclick=()=>vote("LOSS");
 
 
-  socket.on("winnerUpdate", async (data)=>{
-  try{
-    if(!data) return;
-    if(!data.concluded) return;
-    if(CONCLUDE_HANDLED) return;
-    CONCLUDE_HANDLED=true;
-
-    const reveal = await api(`/api/fights/${code}/reveal`);
-    const wt = String(reveal.winner_team||"DRAW").toUpperCase();
-    let outcome="DRAW";
-    if(wt!=="DRAW"){
-      const mySide = String(reveal.my_side||"").toUpperCase();
-      outcome = (wt===mySide) ? "VICTORY" : "DEFEAT";
-    }
-    const delta = Number(reveal.rating_delta||15);
-    const signed = outcome==="VICTORY" ? +delta : (outcome==="DEFEAT" ? -delta : 0);
-
-    const outcomeTxt = outcome==="VICTORY" ? "Victory" : (outcome==="DEFEAT"?"Defeat":"Draw");
-    addSystemLine(`Result: ${outcomeTxt} (${signed>=0?'+':''}${signed} Rating)`);
-    if(reveal.location) addSystemLine(`Location: ${reveal.location}`);
-    if(Array.isArray(reveal.participants)){
-      const ppl = reveal.participants.map(p=>`${p.username} (${p.rating})`).join(", ");
-      addSystemLine(`Participants: ${ppl}`);
-    }
-
-    if(outcome==="VICTORY") playNarrator("VICTORY");
-    if(outcome==="DEFEAT") playNarrator("DEFEAT");
-
-    addSystemLine("Match concluded, closing in 5 seconds…");
-    try{ chatInput.disabled=true; sendBtn.disabled=true; }catch{}
-    startCloseCountdown();
-  }catch(e){ console.error("[winnerUpdate]", e); }
-});
+  socket.on("winnerUpdate",(data)=>{});
       msg.textContent="A winner must be decided. Select again.";
       card.classList.add("nudge");
       setTimeout(()=>card.classList.remove("nudge"), 900);
@@ -348,13 +316,43 @@ function playNarrator(result){
 document.addEventListener("DOMContentLoaded", ()=>{ init(); });
 
 
-socket.on("forceCloseMatch", (p)=>{
+socket.on("forceCloseMatch",(p)=>{
   try{
     if(!p || p.code!==code) return;
-    if(CONCLUDE_HANDLED) return;
-    CONCLUDE_HANDLED=true;
+    if(window.__concludeHandled) return;
+    window.__concludeHandled=true;
 
-    const outcome = String(p.outcome||"").toUpperCase();
+    const outcome = String(p.outcome||"DRAW").toUpperCase();
+    const delta = Number(p.rating_delta||0);
+    const outcomeTxt = outcome==="VICTORY" ? "Victory" : (outcome==="DEFEAT" ? "Defeat" : "Draw");
+
+    addSystemLine(`Result: ${outcomeTxt} (${delta>=0?"+":""}${delta} Rating)`);
+    if(p.location) addSystemLine(`Location: ${p.location}`);
+    if(Array.isArray(p.participants)){
+      const ppl = p.participants.map(x=>`${x.username} (${x.rating})`).join(", ");
+      addSystemLine(`Participants: ${ppl}`);
+    }
+
+    if(outcome==="VICTORY") playNarrator("VICTORY");
+    if(outcome==="DEFEAT") playNarrator("DEFEAT");
+
+    addSystemLine("Match concluded, closing in 5 seconds…");
+    try{ chatInput.disabled=true; sendBtn.disabled=true; }catch{}
+
+    let secs=5;
+    concludeBanner.textContent = `Match concluded, closing in ${secs} seconds`;
+    concludeBanner.classList.remove("hidden");
+
+    const t=setInterval(()=>{
+      secs -= 1;
+      concludeBanner.textContent = `Match concluded, closing in ${secs} seconds`;
+      if(secs<=0){
+        clearInterval(t);
+        try{ window.parent.postMessage({type:"CLOSE_MATCH", code}, "*"); }catch{}
+      }
+    },1000);
+  }catch(e){ console.error("[forceCloseMatch]", e); }
+});
     const delta = Number(p.rating_delta||0);
 
     const outcomeTxt = outcome==="VICTORY" ? "Victory" : "Defeat";
