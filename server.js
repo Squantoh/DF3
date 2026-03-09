@@ -550,22 +550,35 @@ app.get("/api/fights/:code", authMiddleware, async (req,res)=>{
 
 // Chat
 app.post("/api/fights/:code/chat", authMiddleware, async (req, res) => {
-  const code = String(req.params.code);
+  const code = String(req.params.code || "").trim();
+  const userId = req.auth.id;
   const text = String(req.body?.text || "").trim().slice(0, 300);
-  if (!text) return res.status(400).json({ error: "text required" });
+  if(!code) return res.status(400).json({ error: "code required" });
+  if(!text) return res.status(400).json({ error: "text required" });
 
   const fr = await query("SELECT * FROM fights WHERE code=$1", [code]);
-  const fight = fr.rows[0];
-  if (!fight) return res.status(404).json({ error: "not found" });
-  if (fight.status !== "MATCHED") return res.status(400).json({ error: "chat locked" });
+  let fight = fr.rows[0] || null;
+  if(!fight){
+    const hr = await query("SELECT * FROM match_history WHERE code=$1", [code]);
+    if(hr.rows[0]) fight = { ...hr.rows[0], status: "ARCHIVED" };
+  }
+  if(!fight) return res.status(404).json({ error: "not found" });
 
-  if (!(await isUserInFight(req.auth.id, fight))) return res.status(403).json({ error: "Not a participant" });
+  const me = await getUserById(userId);
+  const allowed = await isUserInFight(userId, fight) || (me && isAdmin(me.username));
+  if(!allowed) return res.status(403).json({ error: "Not a participant" });
+  if((fight.status === "CONCLUDED") || (fight.status === "ARCHIVED")) return res.status(400).json({ error: "Chat locked" });
 
-  const side = (fight.poster_ids || []).includes(req.auth.id) ? "POSTER" : "ACCEPTER";
-  // alias is generated client-side; server stores null to keep anon in DB
-  await query("INSERT INTO match_messages(code, side, alias, text) VALUES ($1,$2,NULL,$3)", [code, side, text]);
-  io.to(`match:${code}`).emit("chat", { side, alias: null, text, at: new Date().toISOString() });
-  res.json({ ok: true });
+  const side = (fight.poster_ids||[]).includes(userId) ? "POSTER" : ((fight.accepter_ids||[]).includes(userId) ? "ACCEPTER" : "SYSTEM");
+  const ALIASES = ["Akathar","Guardian","Fire Dragon","Dark Dragon","Devil","Demon Lord","Goblin Fighter","Goblin Warlord","Goblin Scout","Brown Bear","Tomb Iklit","Human Guildmaster","Deadeye","Manscorpion","Gorra Dar","Sand Iklit","Erodach","Baradron","Forest Golem","Troll","Troll Lord","Great White","Brownie","Goblin Shaman","Giant Spider","Windlord","Centaur","Ancient","Beastman","Crog","Khamset","Minotaur","Kraken"];
+  const h = crypto.createHash("sha1").update(code+":"+userId).digest("hex");
+  const idx = parseInt(h.slice(0,8),16) % ALIASES.length;
+  const alias = ALIASES[idx];
+
+  await query("INSERT INTO match_messages(code, side, alias, text) VALUES ($1,$2,$3,$4)", [code, side, alias, text]);
+  const msg = { code, side, alias, text, at: new Date().toISOString() };
+  io.to(`match:${code}`).emit("chat", msg);
+  res.json({ ok: true, msg });
 });
 
 // Winner confirm (single per team, allow reset if mismatch)
