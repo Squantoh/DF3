@@ -303,6 +303,14 @@ async function refreshNotifs(){
   const pager=document.getElementById('notifPager');
   if(pager) pager.innerHTML='';
   if(!notifs.length){ box.innerHTML=`<div class="tiny">No notifications yet.</div>`; return; }
+  try{
+    const active = notifs.find(x=>x.type==="CURRENT_MATCH" && x.payload?.code);
+    const c = active?.payload?.code;
+    if(c && !OPEN_MATCH_CODE && !AUTO_OPENED.has(c) && !DISMISSED.has(c)){
+      openMatchPanel(c);
+      markAutoOpened(c);
+    }
+  }catch{}
 
   for(const n of notifs){
     const t=n.type, p=n.payload||{};
@@ -312,26 +320,7 @@ async function refreshNotifs(){
       const item=el(`
         <div class="item">
           <div>
-            <div class="title">Currently in a match</div>
-            <div class="meta">Location: ${escapeHtml(p.meetup_location||"")}</div>
-            <div class="meta">${time}</div>
-          </div>
-          <div class="row" style="margin:0;">
-            ${OPEN_MATCH_CODE===p.code?`<span class="tiny">Match open</span>`:`<button class="btn primary">Rejoin match</button>`}
-          </div>
-        </div>
-      `);
-      const btn=item.querySelector("button");
-      if(btn) btn.onclick=()=>openMatchPanel(p.code);
-      box.appendChild(item);
-      continue;
-    }
-
-    if(t==="MATCH_READY"){
-      const item=el(`
-        <div class="item">
-          <div>
-            <div class="title">Match found: ${p.team_size}v${p.team_size}</div>
+            <div class="title">Currently in a match:</div>
             <div class="meta">Location: ${escapeHtml(p.meetup_location||"")}</div>
             <div class="meta">${time}</div>
           </div>
@@ -341,10 +330,7 @@ async function refreshNotifs(){
         </div>
       `);
       const btn=item.querySelector("button");
-      if(btn) btn.onclick=async()=>{
-        await api(`/api/notifications/${n.id}/read`,{method:"POST"}).catch(()=>{});
-        openMatchPanel(p.code);
-      };
+      if(btn) btn.onclick=()=>openMatchPanel(p.code);
       box.appendChild(item);
       continue;
     }
@@ -404,14 +390,22 @@ async function refreshNotifs(){
 }
 
 socket.on("notification", async (notif)=>{
-  if(notif?.type==="MATCH_READY"){
+  if(notif?.type==="CURRENT_MATCH"){
     startNotifyLoop();
     flashBrowserNotification("Rise of Agon PvP Finder","Match found!");
     playOneShot("/audio/notify.wav");
-    if(notif?.payload?.code){ /* no auto-open; use Rejoin/Open button in Matches */ }
+    const c = notif?.payload?.code;
+    if(c && !OPEN_MATCH_CODE){
+      try{
+        if(!AUTO_OPENED.has(c) && !DISMISSED.has(c)){
+          openMatchPanel(c);
+          markAutoOpened(c);
+        }
+      }catch{}
+    }
   }
   if(notif?.type==="FIGHT_CONCLUDED"){
-    const r = String(notif.payload?.result || "");
+    const r = String(notif.payload?.outcome || notif.payload?.result || "");
     if(r==="VICTORY") playOnce("/audio/df_narrator_victory.wav");
     if(r==="DEFEAT") playOnce("/audio/df_narrator_defeat.wav");
   }

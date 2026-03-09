@@ -307,7 +307,18 @@ body::before{
 
 .adminDrag:active{ cursor: grabbing; }
 
-#matchPanel{ z-index: 20000 !important; }
+#matchPanel{
+  position: fixed !important;
+  left: 50% !important;
+  top: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  width: 80vw !important;
+  height: 80vh !important;
+  max-width: 80vw !important;
+  max-height: 80vh !important;
+  z-index: 20000 !important;
+  margin: 0 !important;
+}
 
 #drawer.adminDrag{ right:auto !important; }
 #adminTools.adminDrag{ right:auto !important; }

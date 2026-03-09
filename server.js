@@ -506,7 +506,7 @@ app.post("/api/fights/:code/accept", authMiddleware, async (req,res)=>{
   // notify all participants
   const participantIds = Array.from(new Set([...(fight.poster_ids||[]), ...accepterIds]));
   for(const uid of participantIds){
-    await notifyUser(uid, "MATCH_READY", { code, team_size: fight.team_size, meetup_location: location });
+    // MATCH_READY suppressed; active match is shown via CURRENT_MATCH in /api/notifications
   }
   io.to(`match:${code}`).emit("matchReady", { code, team_size: fight.team_size, location, match_expires_at: endsAt });
 
