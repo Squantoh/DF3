@@ -374,6 +374,7 @@ app.post("/api/fights", authMiddleware, async (req, res) => {
   if (await userHasActiveFight(u.id)) return res.status(400).json({ error: "You already have an active fight." });
 
   const teamSize = Number(req.body?.teamSize || 1);
+  const matchMode = String(req.body?.match_mode || "LAWLESS").toUpperCase()==="LAWFUL" ? "LAWFUL" : "LAWLESS";
   if (!Number.isFinite(teamSize) || teamSize < 1 || teamSize > 99) return res.status(400).json({ error: "invalid team size" });
 
   const teammateUsernames = Array.isArray(req.body?.teammateUsernames) ? req.body.teammateUsernames : [];
@@ -400,8 +401,8 @@ app.post("/api/fights", authMiddleware, async (req, res) => {
   const expiresAt = nowPlusMinutes(30);
 
   await query(
-    "INSERT INTO fights(code, team_size, format, status, created_at, expires_at, poster_ids, poster_team_name) VALUES ($1,$2,$3,'OPEN',NOW(),$4,$5,$6)",
-    [code, teamSize, format, expiresAt, ids, u.team_name]
+    "INSERT INTO fights(code, team_size, format, status, created_at, expires_at, poster_ids, poster_team_name, match_mode) VALUES ($1,$2,$3,'OPEN',NOW(),$4,$5,$6,$7)",
+    [code, teamSize, format, expiresAt, ids, u.team_name, matchMode]
   );
 
   res.json({ ok: true, code });

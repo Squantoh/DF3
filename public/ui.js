@@ -295,7 +295,7 @@ async function refreshOpenFights(){
 async function refreshNotifs(){
   const box=document.getElementById("notifs");
   if(!ME){ box.innerHTML=`<div class="tiny">Login to receive notifications.</div>`; return; }
-  const data=await api("/api/notifications?page=1&pageSize=4").catch(()=>({notifications:[]}));
+  const data=await api("/api/notifications").catch(()=>({notifications:[]}));
   const notifs=data.notifications || [];
   box.innerHTML="";
   const pager=document.getElementById('notifPager');
