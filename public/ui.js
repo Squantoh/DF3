@@ -90,8 +90,8 @@ function renderMe(){
           </div>
           <div class="tiny" id="authMsg"></div>
         `;
-        document.getElementById("p").addEventListener("keydown",(e)=>{ if(e.key==="Enter") document.getElementById("go").click(); });
-        document.getElementById("u").addEventListener("keydown",(e)=>{ if(e.key==="Tab"){} });
+        document.getElementById("u").addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ e.preventDefault(); document.getElementById("p").focus(); }});
+        document.getElementById("p").addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ e.preventDefault(); document.getElementById("go").click(); }});
         document.getElementById("go").onclick=async()=>{
           const msg=document.getElementById("authMsg"); msg.textContent="";
           try{
@@ -835,7 +835,6 @@ setTimeout(()=>{
   }catch{}
 }, 250);
     
-
 function setupMatchModeUI(){
   const lawless=document.getElementById("matchModeLawless");
   const lawful=document.getElementById("matchModeLawful");
@@ -844,11 +843,10 @@ function setupMatchModeUI(){
     lawless.classList.toggle("selected", MATCH_MODE==="LAWLESS");
     lawful.classList.toggle("selected", MATCH_MODE==="LAWFUL");
   };
-  lawless.onclick=()=>{ MATCH_MODE="LAWLESS"; render(); };
-  lawful.onclick=()=>{ MATCH_MODE="LAWFUL"; render(); };
+  lawless.onclick=()=>{ MATCH_MODE='LAWLESS'; render(); };
+  lawful.onclick=()=>{ MATCH_MODE='LAWFUL'; render(); };
   render();
 }
-
 
 function renderNotifPager(){
   const pager=document.getElementById("notifPager");
@@ -868,5 +866,5 @@ function renderNotifPager(){
 
 document.addEventListener("DOMContentLoaded", ()=>{
   const hb=document.getElementById("matchHistoryBtn");
-  if(hb) hb.onclick=()=>{ NOTIF_PAGE=Math.max(0, Math.ceil(NOTIFS.length/NOTIFS_PER_PAGE)-1); renderNotifs(); renderNotifPager(); };
+  if(hb) hb.onclick=()=>window.open('/match-history.html', '_blank', 'width=1100,height=800');
 });
