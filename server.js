@@ -508,6 +508,22 @@ app.post("/api/fights/:code/accept", authMiddleware, async (req,res)=>{
   for(const uid of participantIds){
     // MATCH_READY suppressed; active match is shown via CURRENT_MATCH in /api/notifications
   }
+  for(const uid of participantIds){
+    io.to(`user:${uid}`).emit("notification", {
+      id: `current-${code}-${uid}`,
+      user_id: uid,
+      type: "CURRENT_MATCH",
+      payload: {
+        code,
+        team_size: fight.team_size,
+        meetup_location: location || "",
+        accepted_at: new Date().toISOString()
+      },
+      created_at: new Date().toISOString(),
+      is_read: false
+    });
+  }
+
   io.to(`match:${code}`).emit("matchReady", { code, team_size: fight.team_size, location, match_expires_at: endsAt });
 
   res.json({ ok:true, code });
