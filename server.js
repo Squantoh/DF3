@@ -261,7 +261,23 @@ app.get("/api/notifications", authMiddleware, async (req, res) => {
     "SELECT id, user_id, type, payload, created_at, is_read FROM notifications WHERE user_id=$1 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
     [req.auth.id, pageSize, offset]
   );
-  res.json({ notifications: r.rows, page, pageSize, totalPages, total });
+  const active = await query(
+    "SELECT code, team_size, format, location, match_expires_at, created_at, accepted_at FROM fights WHERE status='MATCHED' AND ($1=ANY(poster_ids) OR $1=ANY(accepter_ids)) ORDER BY accepted_at DESC NULLS LAST, created_at DESC LIMIT 1",
+    [req.auth.id]
+  );
+  let notifications = r.rows;
+  if(active.rows[0]){
+    const a = active.rows[0];
+    notifications = [{
+      id: `current-${a.code}`,
+      user_id: req.auth.id,
+      type: "CURRENT_MATCH",
+      payload: { code: a.code, team_size: a.team_size, meetup_location: a.location || "", accepted_at: a.accepted_at || a.created_at },
+      created_at: a.accepted_at || a.created_at,
+      is_read: false
+    }, ...notifications];
+  }
+  res.json({ notifications, page, pageSize, totalPages, total: total + (active.rows[0] ? 1 : 0) });
 });
 
 app.post("/api/notifications/:id/read", authMiddleware, async (req, res) => {
@@ -704,13 +720,16 @@ app.post("/api/fights/:code/vote-winner", authMiddleware, async (req,res)=>{
 
   const col = isPoster ? "poster_confirm" : "accepter_confirm";
   await query(`UPDATE fights SET ${col}=$1 WHERE code=$2`, [vote, code]);
-  await query("INSERT INTO match_messages(code, side, alias, text) VALUES ($1,'SYSTEM','Herald',$2)", [code, 'Please confirm match has concluded by confirming a loss or victory.']);
-  io.to(`match:${code}`).emit('chat', { side:'SYSTEM', alias:'Herald', text:'Please confirm match has concluded by confirming a loss or victory.', at:new Date().toISOString() });
 
   // Reload
   const r2 = await query("SELECT poster_confirm, accepter_confirm FROM fights WHERE code=$1", [code]);
   const pc = r2.rows[0].poster_confirm;
   const ac = r2.rows[0].accepter_confirm;
+
+  if((pc && !ac) || (!pc && ac)){
+    await query("INSERT INTO match_messages(code, side, alias, text) VALUES ($1,'SYSTEM','Herald',$2)", [code, 'Please confirm match has concluded by confirming a loss or victory.']);
+    io.to(`match:${code}`).emit('chat', { side:'SYSTEM', alias:'Herald', text:'Please confirm match has concluded by confirming a loss or victory.', at:new Date().toISOString() });
+  }
 
   // If both set
   if(pc && ac){
@@ -818,6 +837,8 @@ app.post("/api/fights/:code/extend", authMiddleware, async (req,res)=>{
 
   const col = isPoster ? "poster_extend" : "accepter_extend";
   await query(`UPDATE fights SET ${col}=TRUE WHERE code=$1`, [code]);
+  await query("INSERT INTO match_messages(code, side, alias, text) VALUES ($1,'SYSTEM','Herald',$2)", [code, 'A 15 minute match extension has been requested.']);
+  io.to(`match:${code}`).emit('chat', { side:'SYSTEM', alias:'Herald', text:'A 15 minute match extension has been requested.', at:new Date().toISOString() });
 
   const r2 = await query("SELECT poster_extend, accepter_extend, extension_count, match_expires_at FROM fights WHERE code=$1", [code]);
   const pe=r2.rows[0].poster_extend;
@@ -828,6 +849,8 @@ app.post("/api/fights/:code/extend", authMiddleware, async (req,res)=>{
     // apply extension
     const newEnd = new Date((fight.match_expires_at ? Date.parse(fight.match_expires_at) : Date.now()) + 15*60*1000);
     await query("UPDATE fights SET match_expires_at=$1, extension_count=extension_count+1, poster_extend=FALSE, accepter_extend=FALSE WHERE code=$2", [newEnd.toISOString(), code]);
+    await query("INSERT INTO match_messages(code, side, alias, text) VALUES ($1,'SYSTEM','Herald',$2)", [code, "Granted 15 minute match extension."]);
+    io.to(`match:${code}`).emit("chat", { side:"SYSTEM", alias:"Herald", text:"Granted 15 minute match extension.", at:new Date().toISOString() });
     io.to(`match:${code}`).emit("extended", { match_ends_at: newEnd.toISOString() });
     return res.json({ ok:true, match_ends_at: newEnd.toISOString() });
   }

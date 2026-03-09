@@ -197,6 +197,7 @@ function closeMatchPanel(concluded=false){
   frame.src="about:blank";
   stopNotifyLoop();
   OPEN_MATCH_CODE = null;
+  try{ refreshNotifs(); }catch{}
   if(concluded){ setTimeout(()=>location.reload(), 250); }
 }
 
@@ -211,7 +212,7 @@ function openMatchPanel(code){
   try{ refreshNotifs(); }catch{}
   stopNotifyLoop();
   flashBrowserNotification("Rise of Agon PvP Finder", "Match opened.");
-  document.getElementById("closePanelBtn").onclick=closeMatchPanel;
+  document.getElementById("closePanelBtn").onclick=()=>closeMatchPanel(false);
   document.getElementById("popOutBtn").onclick=()=>window.open(url,"_blank");
 }
 
@@ -306,6 +307,26 @@ async function refreshNotifs(){
   for(const n of notifs){
     const t=n.type, p=n.payload||{};
     const time=new Date(n.created_at).toLocaleString();
+
+    if(t==="CURRENT_MATCH"){
+      const item=el(`
+        <div class="item">
+          <div>
+            <div class="title">Currently in a match</div>
+            <div class="meta">Match found: ${p.team_size}v${p.team_size}</div>
+            <div class="meta">Location: ${escapeHtml(p.meetup_location||"")}</div>
+            <div class="meta">${time}</div>
+          </div>
+          <div class="row" style="margin:0;">
+            ${OPEN_MATCH_CODE===p.code?`<span class="tiny">Match open</span>`:`<button class="btn primary">Rejoin match</button>`}
+          </div>
+        </div>
+      `);
+      const btn=item.querySelector("button");
+      if(btn) btn.onclick=()=>openMatchPanel(p.code);
+      box.appendChild(item);
+      continue;
+    }
 
     if(t==="MATCH_READY"){
       const item=el(`
