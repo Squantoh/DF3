@@ -971,7 +971,7 @@ app.post("/api/admin/reset-rating", authMiddleware, adminMiddleware, async (req,
 app.post("/api/admin/reset-all-ratings", authMiddleware, adminMiddleware, async (req, res) => {
   const rating = Number(req.body?.rating);
   const r = Number.isFinite(rating) ? rating : 1000;
-  await query("UPDATE users SET rating=$1 WHERE banned=false", [r]);
+  await query("UPDATE users SET rating=$1, wins=0, losses=0 WHERE banned=false", [r]);
   res.json({ ok: true, rating: r });
 });
 
