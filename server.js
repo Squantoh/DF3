@@ -837,11 +837,13 @@ app.post("/api/fights/:code/extend", authMiddleware, async (req,res)=>{
 
   const col = isPoster ? "poster_extend" : "accepter_extend";
   await query(`UPDATE fights SET ${col}=TRUE WHERE code=$1`, [code]);
-  await query("INSERT INTO match_messages(code, side, alias, text) VALUES ($1,'SYSTEM','Herald',$2)", [code, 'A 15 minute match extension has been requested.']);
-  io.to(`match:${code}`).emit('chat', { side:'SYSTEM', alias:'Herald', text:'A 15 minute match extension has been requested.', at:new Date().toISOString() });
 
   const r2 = await query("SELECT poster_extend, accepter_extend, extension_count, match_expires_at FROM fights WHERE code=$1", [code]);
   const pe=r2.rows[0].poster_extend;
+  if((pe && !r2.rows[0].accepter_extend) || (!pe && r2.rows[0].accepter_extend)){
+    await query("INSERT INTO match_messages(code, side, alias, text) VALUES ($1,'SYSTEM','Herald',$2)", [code, 'A 15 minute match extension has been requested.']);
+    io.to(`match:${code}`).emit('chat', { side:'SYSTEM', alias:'Herald', text:'A 15 minute match extension has been requested.', at:new Date().toISOString() });
+  }
   const ae=r2.rows[0].accepter_extend;
   const cnt=r2.rows[0].extension_count||0;
 
