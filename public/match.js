@@ -299,3 +299,13 @@ window.addEventListener("DOMContentLoaded", async ()=>{
     timerEl.textContent = "--:--";
   }
 });
+
+
+function applyResponsiveScale(){
+  try{
+    const base = Math.max(12, Math.min(18, Math.floor(window.innerWidth / 80)));
+    document.documentElement.style.fontSize = base + "px";
+  }catch{}
+}
+window.addEventListener("resize", applyResponsiveScale);
+window.addEventListener("DOMContentLoaded", applyResponsiveScale);

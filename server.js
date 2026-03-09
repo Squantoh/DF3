@@ -489,7 +489,7 @@ app.post("/api/fights/:code/accept", authMiddleware, async (req,res)=>{
 
   // Choose location
   const LOCS = ["South of Simiran","West of Hintenfau","North of White View","West of Ottenhal","South West of Espenhal","North of Tolenque","South of Hintenfau","South of Ottenhal"];
-  const location = String(fight.match_mode||"LAWLESS").toUpperCase()==="LAWFUL" ? "Lawful Village" : LOCS[Math.floor(Math.random()*LOCS.length)];
+  const location = String(fight.match_mode||"LAWLESS").toUpperCase()==="LAWFUL" ? "Lawful Location" : LOCS[Math.floor(Math.random()*LOCS.length)];
 
   const endsAt = new Date(Date.now() + 30*60*1000).toISOString();
 
@@ -500,7 +500,7 @@ app.post("/api/fights/:code/accept", authMiddleware, async (req,res)=>{
   );
 
     if(String(fight.match_mode||"LAWLESS").toUpperCase()==="LAWFUL"){
-    await query("INSERT INTO match_messages(code, side, alias, text) VALUES ($1,'SYSTEM','Herald',$2)", [code, "This is a lawful match. Please coordinate with your opponent to pick a lawful village to billboard to to engage in combat. Good luck!"]);
+    await query("INSERT INTO match_messages(code, side, alias, text) VALUES ($1,'SYSTEM','Herald',$2)", [code, "This is a lawful match. Please coordinate with your opponent to pick a location to engage in combat. Good luck!"]);
   }
 
   // notify all participants

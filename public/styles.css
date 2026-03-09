@@ -330,3 +330,40 @@ body::before{
 .modeLawless{ color:#ff7d7d; }
 .fightCard.lawful{ border-color: rgba(80,120,255,.45); background: rgba(20,40,90,.28); }
 .fightCard.lawless{ border-color: rgba(255,80,80,.45); background: rgba(90,20,20,.22); }
+
+.siteFooter{
+  color:#fff;
+  text-align:center;
+  font-size:12px;
+  line-height:1.5;
+  opacity:.95;
+  padding:18px 24px 28px;
+  max-width:1200px;
+  margin:0 auto;
+}
+#matchPanel{
+  position:fixed !important;
+  left:10vw !important;
+  top:10vh !important;
+  width:80vw !important;
+  height:80vh !important;
+  max-width:80vw !important;
+  max-height:80vh !important;
+  z-index:20000 !important;
+}
+#matchFrame{
+  width:100% !important;
+  height:100% !important;
+}
+.matchSplit{
+  display:grid;
+  grid-template-columns:minmax(240px, 30%) 1fr !important;
+  height:calc(80vh - 80px) !important;
+}
+@media (max-width: 900px){
+  .matchSplit{
+    grid-template-columns:1fr !important;
+    height:auto !important;
+  }
+}
+.matchCol,.chatCol,.card{ min-width:0; }

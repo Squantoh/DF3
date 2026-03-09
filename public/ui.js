@@ -313,7 +313,6 @@ async function refreshNotifs(){
         <div class="item">
           <div>
             <div class="title">Currently in a match</div>
-            <div class="meta">Match found: ${p.team_size}v${p.team_size}</div>
             <div class="meta">Location: ${escapeHtml(p.meetup_location||"")}</div>
             <div class="meta">${time}</div>
           </div>
@@ -401,13 +400,7 @@ async function refreshNotifs(){
     }
   }
 
-  // AUTO_OPEN_MATCH_READY: if a match-ready notification exists and match popup isn't open, open it automatically.
-  try{
-    if(!OPEN_MATCH_CODE){
-      const m = (notifs||[]).find(x=>x.type==="MATCH_READY" && (x.payload?.code));
-      if(m) openMatchPanel(m.payload.code);
-    }
-  }catch{}
+  // Do not auto-open match room after close; reopen only via Matches button.
 }
 
 socket.on("notification", async (notif)=>{
@@ -415,14 +408,7 @@ socket.on("notification", async (notif)=>{
     startNotifyLoop();
     flashBrowserNotification("Rise of Agon PvP Finder","Match found!");
     playOneShot("/audio/notify.wav");
-    if(notif?.payload?.code){
-      const c = notif.payload.code;
-      if(!AUTO_OPENED.has(c) && !DISMISSED.has(c)){
-        openMatchPanel(c);
-        markAutoOpened(c);
-        stopNotifyLoop();
-      }
-    }
+    if(notif?.payload?.code){ /* no auto-open; use Rejoin/Open button in Matches */ }
   }
   if(notif?.type==="FIGHT_CONCLUDED"){
     const r = String(notif.payload?.result || "");
